@@ -1,243 +1,1453 @@
-# Supply-Chain Disruption Agent
+# 🚚 Supply-Chain Disruption Agent
 
-An AI-powered logistics application that monitors shipment and inventory signals, predicts disruption risks, investigates likely causes, recommends alternatives, and generates a concise operations briefing.
+> **AI-powered supply-chain monitoring, disruption prediction, investigation, and decision support system**
 
-## The Problem
+A three-week AI engineering project focused on building an intelligent **Supply-Chain Disruption Agent** that monitors shipment and supply-chain signals, predicts potential disruptions, investigates their causes, and recommends actionable alternatives to logistics and operations teams.
 
-A late shipment can cascade into stockouts and operational delays, but the risk is often identified too late. This project provides an early-warning and decision-support system for logistics teams.
+The system combines:
 
-## What the System Does
+* 🤖 AI Agents & tool calling
+* 📊 Machine Learning
+* 🔎 Retrieval-Augmented Generation (RAG)
+* 🧠 Large Language Models (LLMs)
+* 🌦️ Weather and external signals
+* 📦 Shipment and inventory data
+* 👥 Supplier intelligence
+* ☁️ Microsoft Azure
+* ⚡ FastAPI
+* ⚛️ React
 
-- Combines shipment, inventory, weather, supplier, and news signals.
-- Predicts the probability and severity of shipment delays.
-- Investigates likely causes through agent tool-calling.
-- Retrieves supplier and operating-procedure knowledge through RAG.
-- Recommends alternative routes or suppliers.
-- Generates a disruption briefing for the operations team.
-- Presents results through a web dashboard deployed on Azure.
+---
 
-## Architecture
+# 📌 Table of Contents
 
-```mermaid
-flowchart TD
-    U[Operations User] -->|Select shipment or request analysis| FE[React Frontend]
-    FE -->|HTTPS / REST API| API[FastAPI Backend]
+* [1. Project Overview](#1-project-overview)
+* [2. Problem Statement](#2-problem-statement)
+* [3. Project Objectives](#3-project-objectives)
+* [4. Solution Overview](#4-solution-overview)
+* [5. System Architecture](#5-system-architecture)
+* [6. Architecture Components](#6-architecture-components)
+* [7. End-to-End Workflow](#7-end-to-end-workflow)
+* [8. Machine Learning Layer](#8-machine-learning-layer)
+* [9. AI Agent Layer](#9-ai-agent-layer)
+* [10. RAG Layer](#10-rag-layer)
+* [11. LLM Layer](#11-llm-layer)
+* [12. Application Layer](#12-application-layer)
+* [13. Data Architecture](#13-data-architecture)
+* [14. Technology Stack](#14-technology-stack)
+* [15. Repository Structure](#15-repository-structure)
+* [16. Development Roadmap](#16-development-roadmap)
+* [17. Team Responsibilities](#17-team-responsibilities)
+* [18. Getting Started](#18-getting-started)
+* [19. Environment Variables](#19-environment-variables)
+* [20. Development Principles](#20-development-principles)
+* [21. Expected Demo](#21-expected-demo)
+* [22. Future Improvements](#22-future-improvements)
+* [23. Team](#23-team)
 
-    subgraph APP[Application Services]
-        ORCH[Agent Orchestrator]
-        PRED[Delay Risk Prediction]
-        RAG[RAG Retrieval Service]
-        BRIEF[Briefing Generator]
-    end
+---
 
-    API --> ORCH
-    ORCH --> PRED
-    ORCH --> RAG
-    ORCH --> BRIEF
+# 1. Project Overview
 
-    subgraph TOOLS[Agent Tools]
-        SHIP[get_shipment_status]
-        WEATHER[get_weather]
-        NEWS[get_disruption_news]
-        ALT[find_alternative_route_or_supplier]
-    end
+The **Supply-Chain Disruption Agent** is an AI-powered logistics decision-support system designed to identify potential shipment disruptions before they develop into major operational problems.
 
-    ORCH --> SHIP
-    ORCH --> WEATHER
-    ORCH --> NEWS
-    ORCH --> ALT
+The system combines multiple supply-chain signals, including:
 
-    subgraph DATA[Data and Knowledge Layer]
-        SHIPDB[(Shipment and Inventory Data)]
-        MODEL[(Trained ML Model)]
-        SEARCH[(Azure AI Search Vector Index)]
-        DOCS[(Supplier and Procedure Documents)]
-    end
+* Shipment status
+* Expected delivery dates
+* Inventory levels
+* Supplier performance
+* Weather conditions
+* Route conditions
+* External disruption signals
+* Operational procedures and supplier knowledge
 
-    SHIP --> SHIPDB
-    PRED --> MODEL
-    RAG --> SEARCH
-    DOCS -->|Chunk, embed and index| SEARCH
+Machine learning is used to estimate the probability of shipment delays or disruption.
 
-    subgraph AZURE[Azure Cloud]
-        FOUNDRY[Microsoft Foundry Agent Service]
-        OPENAI[Azure OpenAI Model]
-        APPSVC[Azure App Service or Container Apps]
-        STORAGE[Azure Blob Storage]
-        MONITOR[Application Insights]
-    end
+An AI agent then investigates high-risk shipments by calling appropriate tools, retrieving relevant knowledge through RAG, and using an LLM to generate an understandable **operations briefing and recommended actions**.
 
-    ORCH <--> FOUNDRY
-    BRIEF --> OPENAI
-    DOCS --> STORAGE
-    API --> APPSVC
-    FE --> APPSVC
-    APPSVC --> MONITOR
+---
 
-    BRIEF --> ORCH
-    ORCH --> API
-    API -->|Risk, causes, recommendations and briefing| FE
+# 2. Problem Statement
+
+A late shipment can create a chain reaction:
+
+```text
+Shipment Delay
+      ↓
+Inventory Shortage
+      ↓
+Production / Operations Disruption
+      ↓
+Customer Service Impact
+      ↓
+Financial Impact
 ```
 
-## Architecture Flow
+The problem is that logistics teams may only become aware of the disruption after it has already occurred.
 
-1. The operations user selects a shipment or submits a shipment ID through the React dashboard.
-2. The frontend sends the request to the FastAPI backend.
-3. The agent orchestrator calls the prediction service and relevant operational tools.
-4. The machine-learning model returns a delay probability and risk level.
-5. Tool calls collect shipment, weather, news, route, and supplier information.
-6. The RAG service retrieves relevant supplier records and operating procedures.
-7. The generative model produces a grounded disruption briefing.
-8. The API returns the risk score, contributing factors, recommendations, evidence, and briefing to the dashboard.
+The goal of this project is therefore to build a system that can answer:
 
-## Tech Stack
+> **Which shipments are likely to be disrupted, why are they at risk, what could be affected, and what should the operations team consider doing?**
 
-| Layer | Technology |
-|---|---|
-| Frontend | React, JavaScript or TypeScript, HTML, CSS |
-| API | Python, FastAPI, Uvicorn, Pydantic |
-| Agent Orchestration | Microsoft Foundry Agent Service, custom Python tools, OpenAPI tool-calling |
-| Machine Learning | pandas, NumPy, scikit-learn, joblib |
-| RAG and Retrieval | Azure AI Search, vector search, document chunking and embeddings |
-| Generative AI | Azure OpenAI model for investigation summaries and operations briefings |
-| Data Sources | Shipment, inventory, supplier, weather, route, and public disruption data |
-| Operational Database | Azure SQL Database or PostgreSQL |
-| Document Storage | Azure Blob Storage |
-| Deployment | Azure App Service or Azure Container Apps, Docker |
-| Monitoring | Azure Monitor, Application Insights, structured application logs |
-| Testing | pytest, FastAPI TestClient, Postman, React Testing Library |
-| Collaboration | Git, GitHub, GitHub Projects, pull requests |
-| Security | Microsoft Entra ID, managed identities, Azure Key Vault, role-based access control |
+---
 
-## Core AI Components
+# 3. Project Objectives
 
-### 1. Delay-Risk Prediction
+The system should be able to:
 
-The machine-learning service uses shipment and operational features to return:
+### 1. Monitor
 
-- Delay probability
-- Risk level: Low, Medium, or High
-- Important contributing factors
+Monitor shipment and supply-chain signals from multiple sources.
 
-### 2. Agent Tool-Calling
+### 2. Predict
 
-The agent coordinates the investigation by calling tools such as:
+Predict whether a shipment is likely to arrive late or experience disruption.
+
+### 3. Investigate
+
+Investigate the potential causes of the disruption using external tools and data.
+
+### 4. Assess Impact
+
+Determine whether the disruption could create meaningful inventory or operational exposure.
+
+### 5. Recommend
+
+Identify potential alternative suppliers, routes, or operational actions.
+
+### 6. Explain
+
+Use RAG and an LLM to explain the situation using relevant operational knowledge.
+
+### 7. Brief
+
+Generate a concise disruption briefing for the operations team.
+
+### 8. Deploy
+
+Deploy the application as a working cloud-based AI product on Microsoft Azure.
+
+---
+
+# 4. Solution Overview
+
+The proposed solution follows this flow:
+
+```text
+        SUPPLY-CHAIN DATA
+               │
+               ▼
+       ┌───────────────┐
+       │ Data Pipeline │
+       └───────┬───────┘
+               │
+               ▼
+       ┌───────────────┐
+       │ Feature       │
+       │ Engineering   │
+       └───────┬───────┘
+               │
+               ▼
+       ┌───────────────┐
+       │ ML Risk Model │
+       └───────┬───────┘
+               │
+               ▼
+       ┌────────────────┐
+       │ AI Supply Chain│
+       │     Agent      │
+       └───────┬────────┘
+               │
+       ┌───────┼────────┐
+       │       │        │
+       ▼       ▼        ▼
+   Shipment Weather  Supplier
+     Tool      Tool    Tool
+       │       │        │
+       └───────┼────────┘
+               │
+               ▼
+       ┌───────────────┐
+       │      RAG      │
+       │ Knowledge Base│
+       └───────┬───────┘
+               │
+               ▼
+       ┌───────────────┐
+       │      LLM      │
+       │ Explanation & │
+       │   Briefing    │
+       └───────┬───────┘
+               │
+               ▼
+       ┌────────────────┐
+       │ React Dashboard│
+       └────────────────┘
+```
+
+---
+
+# 5. System Architecture
+
+## 5.1 High-Level Architecture
+
+The system consists of six major layers:
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                     USER INTERFACE                          │
+│                     React Dashboard                         │
+└─────────────────────────────┬───────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     APPLICATION API                         │
+│                         FastAPI                              │
+└─────────────────────────────┬───────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    AI AGENT ORCHESTRATOR                     │
+│                                                             │
+│  • Understand user request                                  │
+│  • Plan investigation                                       │
+│  • Select tools                                              │
+│  • Call ML model                                             │
+│  • Retrieve knowledge                                        │
+│  • Generate response                                         │
+└──────────────┬──────────────┬──────────────┬────────────────┘
+               │              │              │
+               ▼              ▼              ▼
+        ┌────────────┐ ┌────────────┐ ┌──────────────┐
+        │ Shipment   │ │  Weather   │ │  Supplier    │
+        │    Tool    │ │    Tool    │ │    Tool      │
+        └────────────┘ └────────────┘ └──────────────┘
+               │              │              │
+               └──────────────┼──────────────┘
+                              ▼
+                   ┌─────────────────────┐
+                   │  ML RISK PREDICTION │
+                   │                     │
+                   │ Delay Probability   │
+                   │ Risk Classification │
+                   └──────────┬──────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │        RAG          │
+                   │                     │
+                   │ Supplier Knowledge  │
+                   │ SOPs                │
+                   │ Procedures           │
+                   │ Policies             │
+                   └──────────┬──────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │         LLM         │
+                   │                     │
+                   │ Explanation         │
+                   │ Recommendations     │
+                   │ Operations Briefing │
+                   └──────────┬──────────┘
+                              │
+                              ▼
+                   ┌─────────────────────┐
+                   │   Azure Deployment  │
+                   │                     │
+                   │ Cloud Infrastructure│
+                   └─────────────────────┘
+```
+
+---
+
+## 5.2 Detailed Architecture
+
+```mermaid
+flowchart TB
+
+    USER["Operations User"]
+
+    UI["React Dashboard"]
+
+    API["FastAPI Backend"]
+
+    AGENT["Supply-Chain AI Agent"]
+
+    SHIPMENT["Shipment Status Tool<br/>get_shipment_status()"]
+
+    WEATHER["Weather Tool<br/>get_weather()"]
+
+    SUPPLIER["Supplier Tool<br/>find_alternative_supplier()"]
+
+    INVENTORY["Inventory Service"]
+
+    NEWS["External News / Disruption Signals"]
+
+    ML["ML Risk Prediction Model"]
+
+    FEATURES["Feature Engineering"]
+
+    RAG["RAG Pipeline"]
+
+    KB["Knowledge Base<br/>SOPs / Supplier Procedures / Policies"]
+
+    VECTOR["Vector Store"]
+
+    LLM["LLM"]
+
+    BRIEF["Disruption Briefing"]
+
+    DATA["Supply-Chain Data"]
+
+    AZURE["Azure Cloud Environment"]
+
+    USER --> UI
+    UI --> API
+    API --> AGENT
+
+    AGENT --> SHIPMENT
+    AGENT --> WEATHER
+    AGENT --> SUPPLIER
+    AGENT --> INVENTORY
+    AGENT --> NEWS
+
+    DATA --> FEATURES
+    FEATURES --> ML
+
+    SHIPMENT --> ML
+    WEATHER --> ML
+    SUPPLIER --> ML
+    INVENTORY --> ML
+
+    ML --> AGENT
+
+    KB --> VECTOR
+    VECTOR --> RAG
+    AGENT --> RAG
+
+    RAG --> LLM
+    AGENT --> LLM
+
+    LLM --> BRIEF
+    BRIEF --> API
+    API --> UI
+
+    UI -. deployed on .-> AZURE
+    API -. deployed on .-> AZURE
+    AGENT -. deployed on .-> AZURE
+    ML -. deployed on .-> AZURE
+    RAG -. deployed on .-> AZURE
+```
+
+---
+
+# 6. Architecture Components
+
+## 6.1 React Frontend
+
+The frontend provides the operations control tower.
+
+It should display:
+
+* Active shipments
+* High-risk shipments
+* Delay probabilities
+* Inventory exposure
+* Supplier risk
+* Shipment details
+* Risk explanations
+* Recommended actions
+* Generated disruption briefings
+
+Example:
+
+```text
+SUPPLY CHAIN CONTROL TOWER
+
+Active Shipments        148
+High Risk                12
+Potential Stockouts       5
+At-Risk Suppliers         7
+```
+
+---
+
+# 6.2 FastAPI Backend
+
+FastAPI acts as the main application/API layer.
+
+Responsibilities include:
+
+* API endpoints
+* Authentication where applicable
+* Request validation
+* Communication with the AI agent
+* ML inference
+* Data retrieval
+* RAG retrieval
+* Response formatting
+
+Example endpoints:
+
+```text
+GET  /shipments
+GET  /shipments/{shipment_id}
+GET  /shipments/{shipment_id}/risk
+
+POST /predict-risk
+POST /agent/investigate
+
+GET  /suppliers
+GET  /inventory
+
+POST /briefing/generate
+
+GET  /health
+```
+
+---
+
+# 6.3 AI Agent
+
+The AI agent is responsible for orchestrating the investigation.
+
+It should not simply respond like a chatbot.
+
+Instead, it should determine which tools are required to answer the user's request.
+
+Example:
+
+```text
+User:
+"Why is shipment SHP001 at risk?"
+
+        ↓
+
+Agent
+        ↓
+
+get_shipment_status()
+        ↓
+
+get_weather()
+        ↓
+
+get_supplier_information()
+        ↓
+
+get_inventory_position()
+        ↓
+
+run_risk_prediction()
+        ↓
+
+retrieve_relevant_procedure()
+        ↓
+
+generate_explanation()
+```
+
+The agent therefore acts as the **reasoning and orchestration layer**.
+
+---
+
+# 6.4 Tool Layer
+
+The project should expose operational capabilities as tools.
+
+### Shipment Tool
 
 ```python
 get_shipment_status(shipment_id)
-get_weather(location, date)
-get_disruption_news(route_or_port)
-find_alternative_route(shipment_id)
-find_alternative_supplier(item_id)
 ```
 
-### 3. Retrieval-Augmented Generation
+Returns information such as:
 
-The RAG pipeline indexes approved supplier information and operating procedures. Retrieved evidence is supplied to the model so the generated recommendation is based on project knowledge rather than unsupported assumptions.
+* Current location
+* Shipment status
+* Expected arrival
+* Route
+* Supplier
+* Transit information
 
-### 4. Operations Briefing
+### Weather Tool
 
-The generated briefing should contain:
-
-- Shipment identifier
-- Risk level and delay probability
-- Likely causes
-- Supporting evidence
-- Recommended action
-- Alternative route or supplier, when available
-- Confidence or limitations
-
-## Example API Response
-
-```json
-{
-  "shipment_id": "SHP-1042",
-  "risk_level": "High",
-  "delay_probability": 0.81,
-  "likely_causes": [
-    "Adverse weather near the destination port",
-    "Route congestion"
-  ],
-  "recommended_actions": [
-    "Review the proposed alternative route",
-    "Notify the inventory planning team"
-  ],
-  "sources": [
-    "Shipment status record",
-    "Weather tool response",
-    "Approved disruption procedure"
-  ],
-  "briefing": "Shipment SHP-1042 has a high risk of arriving late. The main contributing signals are adverse weather and route congestion. Operations should review the proposed alternative route and notify inventory planning."
-}
+```python
+get_weather(location)
 ```
 
-## Suggested Repository Structure
+Returns:
+
+* Current weather
+* Forecast
+* Severity
+* Potential route impact
+
+### Supplier Tool
+
+```python
+find_alternative_supplier(product_id, location)
+```
+
+Returns:
+
+* Alternative suppliers
+* Supplier performance
+* Estimated availability
+* Relevant supplier information
+
+### Inventory Tool
+
+```python
+get_inventory_status(product_id, warehouse_id)
+```
+
+Returns:
+
+* Current stock
+* Daily demand
+* Days of inventory
+* Safety stock
+
+---
+
+# 7. End-to-End Workflow
+
+The complete system should follow this process:
+
+```text
+1. Shipment data enters the system
+             ↓
+2. System retrieves relevant supply-chain signals
+             ↓
+3. Features are generated
+             ↓
+4. ML model calculates delay/disruption probability
+             ↓
+5. High-risk shipment is flagged
+             ↓
+6. AI agent investigates the shipment
+             ↓
+7. Agent calls relevant tools
+             ↓
+8. Agent retrieves relevant procedures through RAG
+             ↓
+9. LLM interprets the collected information
+             ↓
+10. System generates recommended actions
+             ↓
+11. System generates disruption briefing
+             ↓
+12. Operations user reviews the result
+```
+
+---
+
+# 8. Machine Learning Layer
+
+## Objective
+
+The ML component predicts the probability that a shipment will experience a delay or disruption.
+
+### Potential Target
+
+```text
+Delayed
+```
+
+Example:
+
+```text
+0 = On Time
+1 = Delayed
+```
+
+The model may also produce a probability:
+
+```text
+Delay Probability = 0.87
+```
+
+Which can be translated into:
+
+```text
+0.00 - 0.39 → LOW
+0.40 - 0.69 → MEDIUM
+0.70 - 1.00 → HIGH
+```
+
+Thresholds will be validated during model development.
+
+---
+
+## Potential Features
+
+```text
+supplier_delay_rate
+historical_transit_time
+current_transit_time
+distance_remaining
+days_to_expected_arrival
+weather_severity
+route_risk
+supplier_reliability
+port_congestion
+inventory_days
+shipment_priority
+```
+
+---
+
+## Model Development
+
+The initial approach should include a baseline model and at least one stronger tree-based model.
+
+Potential models:
+
+```text
+Logistic Regression
+        ↓
+Random Forest
+        ↓
+XGBoost / Gradient Boosting
+```
+
+Models will be evaluated using appropriate classification metrics, including:
+
+* Precision
+* Recall
+* F1 Score
+* ROC-AUC
+* Confusion Matrix
+
+For supply-chain disruption detection, particular attention should be paid to **false negatives**, because failing to identify a genuinely risky shipment may have significant operational consequences.
+
+---
+
+# 9. AI Agent Layer
+
+The agent is responsible for deciding:
+
+> **What information do I need to investigate this disruption?**
+
+### Example
+
+```text
+User:
+"Investigate shipment SHP001."
+
+Agent
+│
+├── get_shipment_status()
+│
+├── get_weather()
+│
+├── get_supplier_information()
+│
+├── get_inventory_status()
+│
+├── run_risk_prediction()
+│
+├── search_knowledge_base()
+│
+└── generate_briefing()
+```
+
+The agent should provide traceable reasoning through **tool outputs and retrieved evidence**, rather than relying on unsupported assumptions.
+
+---
+
+# 10. RAG Layer
+
+The RAG system provides the agent/LLM with domain-specific knowledge.
+
+## Knowledge Base
+
+Potential documents include:
+
+```text
+SOPs
+Supplier procedures
+Procurement policies
+Logistics procedures
+Escalation procedures
+Inventory policies
+Disruption response procedures
+Supplier profiles
+```
+
+### RAG Pipeline
+
+```text
+Documents
+    ↓
+Document Loading
+    ↓
+Text Extraction
+    ↓
+Chunking
+    ↓
+Embeddings
+    ↓
+Vector Database
+    ↓
+Similarity Search
+    ↓
+Relevant Context
+    ↓
+LLM
+```
+
+The purpose of RAG is to ground recommendations in available operational knowledge rather than allowing the LLM to invent procedures.
+
+---
+
+# 11. LLM Layer
+
+The LLM is responsible primarily for:
+
+* Explaining risk
+* Summarizing investigation results
+* Translating technical outputs into operational language
+* Generating disruption briefings
+* Presenting recommendations clearly
+
+The LLM should **not replace the ML risk model**.
+
+The intended architecture is:
+
+```text
+ML Model
+   ↓
+Risk Prediction
+   ↓
+AI Agent
+   ↓
+Investigation
+   ↓
+RAG + Tools
+   ↓
+LLM
+   ↓
+Human-readable briefing
+```
+
+---
+
+# 12. Business Impact Assessment
+
+A key principle of the project is:
+
+> **Risk is not the same as business impact.**
+
+For example:
+
+```text
+Shipment A
+Delay Probability = 90%
+Inventory Coverage = 60 days
+```
+
+The delay may have limited immediate operational impact.
+
+While:
+
+```text
+Shipment B
+Delay Probability = 55%
+Inventory Coverage = 2 days
+```
+
+could represent a more urgent situation.
+
+Therefore, the system should consider both:
+
+```text
+Delay Risk
+     +
+Inventory Exposure
+     +
+Shipment Criticality
+     ↓
+Disruption Priority
+```
+
+The final implementation may use a transparent business-rule score rather than a separate ML model.
+
+---
+
+# 13. Data Architecture
+
+The project will combine multiple data sources.
+
+```text
+                  DATA SOURCES
+                       │
+       ┌───────────────┼────────────────┐
+       │               │                │
+       ▼               ▼                ▼
+   Shipment         Inventory        Supplier
+     Data              Data            Data
+       │               │                │
+       └───────────────┼────────────────┘
+                       │
+                       ▼
+                Data Processing
+                       │
+                       ▼
+              Feature Engineering
+                       │
+                       ▼
+                 ML Data Layer
+                       │
+                       ▼
+               Risk Prediction
+```
+
+External signals:
+
+```text
+Weather APIs
+News / disruption signals
+Public logistics datasets
+Shipping datasets
+```
+
+---
+
+# 14. Technology Stack
+
+| Layer            | Technology                     |
+| ---------------- | ------------------------------ |
+| Frontend         | React                          |
+| Backend          | FastAPI / Python               |
+| Programming      | Python / JavaScript            |
+| Machine Learning | Scikit-learn / XGBoost         |
+| AI Agent         | Agent framework / tool calling |
+| LLM              | Azure/OpenAI-compatible LLM    |
+| RAG              | Embeddings + Vector Database   |
+| Data Processing  | Pandas / NumPy                 |
+| APIs             | REST                           |
+| Cloud            | Microsoft Azure                |
+| Version Control  | Git / GitHub                   |
+| Documentation    | Markdown                       |
+| Testing          | Pytest / API testing           |
+
+Specific Azure services will be finalized during implementation based on project requirements, free-credit constraints, and deployment architecture.
+
+---
+
+# 15. Repository Structure
+
+The repository should follow a modular structure:
 
 ```text
 supply-chain-disruption-agent/
-├── frontend/                 # React web application
-├── backend/
-│   ├── api/                  # FastAPI routes and schemas
-│   ├── agents/               # Agent instructions and orchestration
-│   ├── tools/                # Shipment, weather, news and alternative tools
-│   ├── ml/                   # Training, inference and model artifacts
-│   ├── rag/                  # Ingestion, chunking, indexing and retrieval
-│   └── tests/                # Backend and integration tests
-├── data/
-│   ├── raw/                  # Original project datasets
-│   ├── processed/            # Cleaned and engineered data
-│   └── knowledge/            # Supplier and procedure documents
-├── notebooks/                # Exploration and model experiments
-├── infrastructure/           # Azure and deployment configuration
-├── docs/                     # Architecture, decisions and demo material
+│
+├── README.md
+├── .gitignore
 ├── .env.example
-├── docker-compose.yml
 ├── requirements.txt
-└── README.md
+├── docker-compose.yml
+├── Dockerfile
+│
+├── data/
+│   ├── raw/
+│   ├── processed/
+│   └── external/
+│
+├── notebooks/
+│   ├── 01_data_exploration.ipynb
+│   ├── 02_feature_engineering.ipynb
+│   ├── 03_model_training.ipynb
+│   └── 04_model_evaluation.ipynb
+│
+├── backend/
+│   ├── main.py
+│   ├── api/
+│   │   ├── routes_shipments.py
+│   │   ├── routes_predictions.py
+│   │   ├── routes_agent.py
+│   │   └── routes_briefing.py
+│   │
+│   ├── models/
+│   │   ├── schemas.py
+│   │   └── database_models.py
+│   │
+│   ├── services/
+│   │   ├── shipment_service.py
+│   │   ├── weather_service.py
+│   │   ├── supplier_service.py
+│   │   └── inventory_service.py
+│   │
+│   └── config.py
+│
+├── agent/
+│   ├── agent.py
+│   ├── tools/
+│   │   ├── shipment_tool.py
+│   │   ├── weather_tool.py
+│   │   ├── supplier_tool.py
+│   │   └── inventory_tool.py
+│   │
+│   └── prompts/
+│       └── system_prompt.txt
+│
+├── ml/
+│   ├── preprocessing.py
+│   ├── features.py
+│   ├── train.py
+│   ├── predict.py
+│   ├── evaluate.py
+│   └── artifacts/
+│
+├── rag/
+│   ├── ingestion.py
+│   ├── chunking.py
+│   ├── embeddings.py
+│   ├── retrieval.py
+│   └── documents/
+│
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── services/
+│   │   └── App.jsx
+│   ├── package.json
+│   └── README.md
+│
+├── tests/
+│   ├── test_api.py
+│   ├── test_ml.py
+│   ├── test_tools.py
+│   ├── test_agent.py
+│   └── test_rag.py
+│
+├── docs/
+│   ├── architecture/
+│   ├── api/
+│   └── demo/
+│
+└── deployment/
+    ├── azure/
+    └── docker/
 ```
 
-## Team Workstreams
+The structure can evolve as implementation progresses.
 
-| Workstream | Owner | Main Responsibility |
-|---|---|---|
-| Leadership and Integration | Frederick | Scope, coordination, integration, Azure deployment and final demonstration |
-| Data and Machine Learning | Olawumi | Data preparation, feature engineering, model training and evaluation |
-| Backend and Agent Tools | Tosin | FastAPI, model integration, tool functions and error handling |
-| RAG and Generative AI | Janet | Knowledge ingestion, retrieval, prompts and briefing generation |
-| Frontend and Quality Assurance | Joy | React dashboard, user workflow, testing and demo scenarios |
+---
 
-Workstream ownership supports accountability, but every team member should understand the complete end-to-end solution.
+# 16. Development Roadmap
 
-## Minimum Viable Product
+## Week 5 — Foundation & ML
 
-The first working version should allow a user to:
+### Objectives
 
-1. Select or enter a shipment.
-2. Receive a delay probability and risk level.
-3. View likely disruption factors.
-4. Trigger at least two agent tools.
-5. Retrieve a relevant supplier or procedure document.
-6. Receive an actionable recommendation.
-7. Generate a concise operations briefing.
+Build the data and prediction foundation.
 
-## Responsible AI and Safety
+### Deliverables
 
-- Show the evidence used to support recommendations.
-- Keep prediction results separate from generated explanations.
-- Label simulated or mock data clearly.
-- Do not let the language model invent shipment facts, suppliers, or routes.
-- Apply human review before operational decisions are executed.
-- Log tool calls, model outputs, failures, and user-visible recommendations.
-- Avoid exposing credentials, personal data, or confidential supplier information.
+* [ ] Identify datasets
+* [ ] Define data schema
+* [ ] Clean datasets
+* [ ] Integrate shipment/inventory/supplier data
+* [ ] Engineer ML features
+* [ ] Build baseline model
+* [ ] Train improved model
+* [ ] Evaluate model
+* [ ] Save trained model
+* [ ] Create prediction API
+* [ ] Define agent tools
 
-## Project Status
+### Week 5 Target
 
-**Current phase:** Planning and architecture design.
+The team should be able to provide:
 
-Initial priorities:
+```text
+Shipment ID
+       ↓
+ML Model
+       ↓
+Delay Probability
+       ↓
+Risk Classification
+```
 
-- Confirm the delay definition and target variable.
-- Select the dataset and external data sources.
-- Agree on API input and output schemas.
-- Build one end-to-end shipment scenario.
-- Deploy the stable MVP to Azure before adding optional features.
+---
+
+# Week 6 — Agent + RAG
+
+### Objectives
+
+Turn the prediction system into an intelligent investigation system.
+
+### Deliverables
+
+* [ ] Implement shipment tool
+* [ ] Implement weather tool
+* [ ] Implement supplier tool
+* [ ] Implement inventory tool
+* [ ] Connect ML model to agent
+* [ ] Build knowledge base
+* [ ] Implement document ingestion
+* [ ] Implement embeddings
+* [ ] Implement vector search
+* [ ] Implement RAG
+* [ ] Build agent workflow
+* [ ] Generate explanations
+
+### Week 6 Target
+
+The agent should be able to:
+
+```text
+Identify Risk
+     ↓
+Investigate Cause
+     ↓
+Retrieve Relevant Knowledge
+     ↓
+Explain Findings
+```
+
+---
+
+# Week 7 — Product + Azure + Demo
+
+### Objectives
+
+Turn the technical components into a working product.
+
+### Deliverables
+
+* [ ] Build React dashboard
+* [ ] Connect frontend to FastAPI
+* [ ] Connect agent to frontend
+* [ ] Add risk visualization
+* [ ] Add shipment investigation screen
+* [ ] Add recommendations
+* [ ] Add briefing generation
+* [ ] Deploy application to Azure
+* [ ] Test production environment
+* [ ] Fix integration issues
+* [ ] Prepare Demo Day presentation
+* [ ] Prepare technical documentation
+
+### Week 7 Target
+
+A user should be able to open the application and:
+
+```text
+View shipments
+      ↓
+Identify high-risk shipment
+      ↓
+Investigate shipment
+      ↓
+Understand why it is at risk
+      ↓
+View possible alternatives
+      ↓
+Generate disruption briefing
+```
+
+---
+
+# 17. Team Responsibilities
+
+Team members should own specific components while collaborating across interfaces.
+
+| Area             | Primary Responsibility                          |
+| ---------------- | ----------------------------------------------- |
+| Project Lead     | Architecture, coordination, integration         |
+| Data Engineering | Data collection, cleaning, integration          |
+| ML Engineering   | Feature engineering, model training, evaluation |
+| AI Engineering   | Agent, tool calling, orchestration              |
+| RAG / LLM        | Knowledge base, retrieval, prompts, briefing    |
+| Frontend         | React dashboard and UX                          |
+| Cloud / DevOps   | Azure deployment and infrastructure             |
+
+> Responsibilities can overlap depending on team size.
+
+---
+
+# 18. Getting Started
+
+## 18.1 Clone the repository
+
+```bash
+git clone <REPOSITORY_URL>
+cd supply-chain-disruption-agent
+```
+
+## 18.2 Create a virtual environment
+
+```bash
+python -m venv .venv
+```
+
+### Windows
+
+```bash
+.venv\Scripts\activate
+```
+
+### macOS / Linux
+
+```bash
+source .venv/bin/activate
+```
+
+---
+
+## 18.3 Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## 18.4 Configure environment variables
+
+Copy:
+
+```bash
+.env.example
+```
+
+to:
+
+```bash
+.env
+```
+
+Then configure the required API keys and service credentials.
+
+**Never commit `.env` to GitHub.**
+
+---
+
+## 18.5 Start the backend
+
+```bash
+uvicorn backend.main:app --reload
+```
+
+The API should then be available locally.
+
+---
+
+## 18.6 Start the frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+---
+
+# 19. Environment Variables
+
+Example:
+
+```env
+# Application
+ENVIRONMENT=development
+
+# LLM
+LLM_API_KEY=
+LLM_ENDPOINT=
+LLM_MODEL=
+
+# Weather
+WEATHER_API_KEY=
+
+# Database
+DATABASE_URL=
+
+# Vector Database
+VECTOR_DB_URL=
+VECTOR_DB_API_KEY=
+
+# Azure
+AZURE_SUBSCRIPTION_ID=
+AZURE_RESOURCE_GROUP=
+AZURE_REGION=
+```
+
+Actual variables will depend on the services selected by the team.
+
+---
+
+# 20. Development Principles
+
+## 20.1 Data Before AI
+
+Ensure the underlying data is reliable before adding advanced AI functionality.
+
+---
+
+## 20.2 ML Predicts — Agent Investigates
+
+The ML model should provide the risk prediction.
+
+The agent should determine how to investigate the prediction.
+
+---
+
+## 20.3 RAG Grounds Knowledge
+
+The RAG system should provide relevant operational knowledge and procedures.
+
+---
+
+## 20.4 LLM Explains
+
+The LLM should transform structured findings into understandable operational communication.
+
+---
+
+## 20.5 Human-in-the-Loop
+
+The system provides recommendations and decision support.
+
+Final operational decisions remain with human users.
+
+```text
+AI
+ ↓
+Detect
+ ↓
+Investigate
+ ↓
+Recommend
+ ↓
+Human
+ ↓
+Decide
+```
+
+---
+
+## 20.6 Modular Architecture
+
+Each component should be independently testable.
+
+```text
+ML
+Agent
+Tools
+RAG
+LLM
+API
+Frontend
+```
+
+should not become one tightly coupled application.
+
+---
+
+## 20.7 Reproducibility
+
+All team members should be able to reproduce the development environment and run the core application.
+
+---
+
+# 21. Expected Demo
+
+The final Demo Day should demonstrate a complete operational scenario.
+
+## Scenario
+
+A shipment is approaching its expected delivery date.
+
+The system detects a high probability of delay.
+
+### Step 1 — Dashboard
+
+```text
+12 HIGH-RISK SHIPMENTS
+```
+
+### Step 2 — Select Shipment
+
+```text
+SHP001
+
+Delay Probability: 87%
+Risk Level: HIGH
+```
+
+### Step 3 — Investigate
+
+The agent calls:
+
+```text
+get_shipment_status()
+get_weather()
+get_inventory_status()
+get_supplier_information()
+```
+
+### Step 4 — Identify Causes
+
+Example:
+
+```text
+Potential Causes
+
+• Severe weather
+• Supplier historical delays
+• Route congestion
+• Low inventory coverage
+```
+
+### Step 5 — Assess Impact
+
+```text
+Inventory Coverage: 3 days
+Expected Delay: 5 days
+
+Potential Stockout: YES
+```
+
+### Step 6 — Find Alternatives
+
+The agent calls:
+
+```text
+find_alternative_supplier()
+```
+
+### Step 7 — Retrieve Procedure
+
+RAG retrieves the relevant disruption/escalation procedure.
+
+### Step 8 — Generate Briefing
+
+The LLM produces:
+
+```text
+SUPPLY-CHAIN DISRUPTION BRIEFING
+
+Shipment: SHP001
+Risk: HIGH
+Delay Probability: 87%
+
+Primary Risk Factors:
+1. Weather
+2. Supplier performance
+3. Route congestion
+
+Business Impact:
+Inventory coverage may be insufficient
+to absorb the expected delay.
+
+Recommended Actions:
+1. Contact alternative supplier.
+2. Evaluate alternative route.
+3. Escalate shipment to operations.
+```
+
+This demonstrates the complete system rather than isolated technical components.
+
+---
+
+# 22. Future Improvements
+
+Potential future enhancements include:
+
+* Real-time shipment tracking
+* More advanced time-series forecasting
+* Port congestion monitoring
+* Real-time news analysis
+* Geospatial route risk
+* Supplier risk scoring
+* Automated alerts
+* Email/Teams notifications
+* What-if simulation
+* Multi-agent architecture
+* Reinforcement learning for routing decisions
+* Automated procurement workflows
+* Advanced supply-chain digital twin
+* Continuous model monitoring
+* Model drift detection
+
+These features are outside the initial MVP unless the team completes the core system early.
+
+---
+
+# 23. Team
+
+## Project
+
+**Logistics: Supply-Chain Disruption Agent**
+
+### Project Lead
+
+**[Team Lead Name]**
+
+### Team Members
+
+* [Member 1]
+* [Member 2]
+* [Member 3]
+* [Member 4]
+* [Member 5]
+
+---
+
+# 🎯 Project Vision
+
+The ultimate goal is to move from:
+
+```text
+Reactive Logistics
+       ↓
+"Shipment has been delayed."
+```
+
+to:
+
+```text
+Predictive Logistics
+       ↓
+"Shipment is likely to be delayed."
+       ↓
+Prescriptive Support
+       ↓
+"Here is why it is at risk,
+what it may affect,
+and what alternatives are available."
+```
+
+The **Supply-Chain Disruption Agent** is designed to help operations teams identify potential disruptions earlier, understand their causes, and make better-informed decisions.
+
+---
+
+## ⭐ Core Architecture Principle
+
+```text
+       DATA
+        ↓
+    ML PREDICTION
+        ↓
+   AI INVESTIGATION
+        ↓
+   TOOL CALLING
+        ↓
+       RAG
+        ↓
+       LLM
+        ↓
+ ACTIONABLE BRIEFING
+        ↓
+ HUMAN DECISION
+```
+
+**Detect → Investigate → Explain → Recommend → Decide**
