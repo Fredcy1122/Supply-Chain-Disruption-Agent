@@ -46,3 +46,12 @@ ML Model  Tools    RAG
   |       |        |
 Shipment  Weather  Supplier and procedure documents
 Data      APIs
+
+## Initial User Workflow
+- User selects or enters a shipment.
+- The system calculates the shipment delay probability.
+- The agent investigates relevant shipment and weather information.
+- RAG retrieves supporting supplier or procedure information.
+- The system recommends an operational action.
+- The system generates an operations briefing.
+- The frontend presents the complete result.
