@@ -130,64 +130,62 @@ Deploy the application as a working cloud-based AI product on Microsoft Azure.
 
 ---
 
+
 # 4. Solution Overview
 
-The proposed solution follows this flow:
+The solution is built around a **risk-first workflow**. The ML model evaluates shipments first; only shipments requiring attention move into deeper AI investigation.
 
-```text
-        SUPPLY-CHAIN DATA
-               │
-               ▼
-       ┌───────────────┐
-       │ Data Pipeline │
-       └───────┬───────┘
-               │
-               ▼
-       ┌───────────────┐
-       │ Feature       │
-       │ Engineering   │
-       └───────┬───────┘
-               │
-               ▼
-       ┌───────────────┐
-       │ ML Risk Model │
-       └───────┬───────┘
-               │
-               ▼
-       ┌────────────────┐
-       │ AI Supply Chain│
-       │     Agent      │
-       └───────┬────────┘
-               │
-       ┌───────┼────────┐
-       │       │        │
-       ▼       ▼        ▼
-   Shipment Weather  Supplier
-     Tool      Tool    Tool
-       │       │        │
-       └───────┼────────┘
-               │
-               ▼
-       ┌───────────────┐
-       │      RAG      │
-       │ Knowledge Base│
-       └───────┬───────┘
-               │
-               ▼
-       ┌───────────────┐
-       │      LLM      │
-       │ Explanation & │
-       │   Briefing    │
-       └───────┬───────┘
-               │
-               ▼
-       ┌────────────────┐
-       │ React Dashboard│
-       └────────────────┘
-```
+~~~text
+SUPPLY-CHAIN DATA
+       ↓
+FEATURE ENGINEERING
+       ↓
+XGBOOST ML MODEL
+       ↓
+DELAY PROBABILITY
+       ↓
+RISK GATE
+   ┌───┴───────────────┐
+   │                   │
+ LOW RISK        MEDIUM / HIGH RISK
+   │                   │
+   ▼                   ▼
+MONITOR             AI AGENT
+                       │
+              ┌────────┼────────┐
+              ▼        ▼        ▼
+           Shipment  Weather  Supplier
+             Tool      Tool      Tool
+              │        │        │
+              └────────┼────────┘
+                       ▼
+                TOOL EVIDENCE
+                       │
+                       ▼
+                      RAG
+                       │
+                       ▼
+                      LLM
+                       │
+                       ▼
+             DISRUPTION BRIEFING
+                       │
+                       ▼
+              OPERATIONS DASHBOARD
+                       │
+                       ▼
+                HUMAN DECISION
+~~~
 
----
+The architecture separates five responsibilities:
 
+1. **Predict** — ML estimates delay risk.
+2. **Gate** — the risk gate determines whether deeper investigation is needed.
+3. **Investigate** — the AI agent selects and calls relevant tools.
+4. **Ground and explain** — RAG provides operational knowledge and the LLM turns the evidence into a briefing.
+5. **Decide** — the operations team reviews the result and makes the final decision.
+
+The system is therefore **not** designed to send every shipment through every tool.
 
 # 5. System Architecture
 
@@ -379,6 +377,7 @@ Risk gate
 
 **Important:** the supplier intelligence dataset is synthetic for the MVP and must be labelled as synthetic. DataCo outcome fields such as Late_delivery_risk, Delivery Status, Days for shipping (real), and post-outcome shipping dates are not ML input features.
 
+
 # 6. Architecture Components
 
 ## 6.1 React Frontend
@@ -387,168 +386,199 @@ The frontend provides the operations control tower.
 
 It should display:
 
-* Active shipments
-* High-risk shipments
-* Delay probabilities
-* Inventory exposure
-* Supplier risk
+* Shipment risk level
+* Delay probability
 * Shipment details
-* Risk explanations
+* Investigation status
+* Tool evidence
+* Business impact
 * Recommended actions
 * Generated disruption briefings
 
-Example:
-
-```text
-SUPPLY CHAIN CONTROL TOWER
-
-Active Shipments        148
-High Risk                12
-Potential Stockouts       5
-At-Risk Suppliers         7
-```
-
 ---
 
-# 6.2 FastAPI Backend
+## 6.2 FastAPI Backend
 
 FastAPI acts as the main application/API layer.
 
 Responsibilities include:
 
 * API endpoints
-* Authentication where applicable
 * Request validation
-* Communication with the AI agent
 * ML inference
-* Data retrieval
+* Shipment data retrieval
+* Communication with the AI agent
 * RAG retrieval
+* Briefing generation
 * Response formatting
-
-Example endpoints:
-
-```text
-GET  /shipments
-GET  /shipments/{shipment_id}
-GET  /shipments/{shipment_id}/risk
-
-POST /predict-risk
-POST /agent/investigate
-
-GET  /suppliers
-GET  /inventory
-
-POST /briefing/generate
-
-GET  /health
-```
 
 ---
 
-# 6.3 AI Agent
+## 6.3 AI Agent
 
-The AI agent is responsible for orchestrating the investigation.
+The AI agent is the **investigation orchestrator**.
 
-It should not simply respond like a chatbot.
+It is not the ML model and it is not the source of shipment facts.
 
-Instead, it should determine which tools are required to answer the user's request.
+Its responsibility is to determine:
+
+> **What information do we need to investigate this risky shipment, and which tools should be called?**
 
 Example:
 
-```text
-User:
-"Why is shipment SHP001 at risk?"
-
+~~~text
+Shipment SHP001
+Delay Probability = HIGH
         ↓
+     AI Agent
+        │
+        ├── get_shipment_status()
+        ├── get_weather()
+        └── find_alternative_supplier()
+        │
+        ▼
+Investigation Evidence
+        │
+        ▼
+       RAG
+        │
+        ▼
+       LLM
+        │
+        ▼
+Disruption Briefing
+~~~
 
-Agent
-        ↓
-
-get_shipment_status()
-        ↓
-
-get_weather()
-        ↓
-
-get_supplier_information()
-        ↓
-
-get_inventory_position()
-        ↓
-
-run_risk_prediction()
-        ↓
-
-retrieve_relevant_procedure()
-        ↓
-
-generate_explanation()
-```
-
-The agent therefore acts as the **reasoning and orchestration layer**.
+The agent should call only the tools relevant to the investigation.
 
 ---
 
-# 6.4 Tool Layer
+## 6.4 Tool Layer
 
-The project should expose operational capabilities as tools.
+The project exposes operational capabilities as tools.
 
 ### Shipment Tool
 
-```python
+~~~python
 get_shipment_status(shipment_id)
-```
+~~~
 
-Returns information such as:
+**MVP source:** DataCo test-period data.
 
-* Current location
-* Shipment status
-* Expected arrival
-* Route
-* Supplier
-* Transit information
+Returns shipment/order information required for investigation, such as:
+
+* Shipment reference
+* Product/category
+* Destination
+* Shipping mode
+* Scheduled shipping information
+* Relevant planning attributes
+
+Post-outcome leakage fields are excluded from ML prediction inputs.
 
 ### Weather Tool
 
-```python
-get_weather(location)
-```
+~~~python
+get_weather(location, date)
+~~~
+
+**MVP source:** Open-Meteo historical weather data.
 
 Returns:
 
-* Current weather
-* Forecast
-* Severity
-* Potential route impact
+* Temperature
+* Precipitation
+* Wind conditions
+* Weather risk indicator
 
 ### Supplier Tool
 
-```python
-find_alternative_supplier(product_id, location)
-```
+~~~python
+find_alternative_supplier(product_category, destination)
+~~~
+
+**MVP source:** Synthetic supplier intelligence dataset.
 
 Returns:
 
-* Alternative suppliers
-* Supplier performance
-* Estimated availability
-* Relevant supplier information
+* Candidate suppliers
+* Supplier performance indicators
+* Lead-time information
+* Capacity/risk indicators
+* Alternative supplier options
 
-### Inventory Tool
+The supplier dataset is explicitly synthetic for the MVP.
 
-```python
+### Optional Inventory Tool
+
+~~~python
 get_inventory_status(product_id, warehouse_id)
-```
+~~~
 
-Returns:
-
-* Current stock
-* Daily demand
-* Days of inventory
-* Safety stock
+Inventory is an optional enrichment layer. It should only be enabled when a defined inventory dataset is available; it is not assumed to exist in the DataCo dataset.
 
 ---
 
+## 6.5 Risk Gate
+
+The risk gate prevents unnecessary investigation.
+
+~~~text
+Delay Probability
+       ↓
+   RISK GATE
+   ┌────┴────┐
+   ↓         ↓
+  LOW     MEDIUM/HIGH
+   ↓         ↓
+MONITOR   INVESTIGATE
+~~~
+
+The exact thresholds will be validated during model development.
+
+---
+
+## 6.6 RAG Layer
+
+RAG provides documented operational knowledge.
+
+Examples include:
+
+* SOPs
+* Supplier procedures
+* Escalation policies
+* Logistics procedures
+* Disruption response playbooks
+
+RAG answers questions such as:
+
+> What does the documented procedure say we should do?
+
+RAG does not replace the operational tools. Tools provide shipment/weather/supplier evidence; RAG provides documented knowledge.
+
+---
+
+## 6.7 LLM Layer
+
+The LLM converts the structured evidence into operational language.
+
+Inputs may include:
+
+* ML risk probability and risk level
+* Shipment information
+* Tool outputs
+* Business-impact information
+* Retrieved RAG context
+
+Outputs include:
+
+* Risk explanation
+* Investigation summary
+* Potential causes
+* Recommended actions
+* Disruption briefing
+
+The LLM should not invent evidence or procedures. Its output should be grounded in the ML result, tool evidence and retrieved knowledge.
 
 # 7. End-to-End Workflow
 
