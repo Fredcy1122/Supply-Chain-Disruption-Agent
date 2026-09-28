@@ -188,160 +188,196 @@ The proposed solution follows this flow:
 
 ---
 
+
 # 5. System Architecture
 
 ## 5.1 High-Level Architecture
 
-The system consists of six major layers:
+The system uses a **risk-first, investigation-on-demand architecture**. Every shipment is first evaluated by the ML risk model. A risk gate then determines whether deeper AI investigation is required.
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                     USER INTERFACE                          │
-│                     React Dashboard                         │
-└─────────────────────────────┬───────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     APPLICATION API                         │
-│                         FastAPI                              │
-└─────────────────────────────┬───────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    AI AGENT ORCHESTRATOR                     │
-│                                                             │
-│  • Understand user request                                  │
-│  • Plan investigation                                       │
-│  • Select tools                                              │
-│  • Call ML model                                             │
-│  • Retrieve knowledge                                        │
-│  • Generate response                                         │
-└──────────────┬──────────────┬──────────────┬────────────────┘
-               │              │              │
-               ▼              ▼              ▼
-        ┌────────────┐ ┌────────────┐ ┌──────────────┐
-        │ Shipment   │ │  Weather   │ │  Supplier    │
-        │    Tool    │ │    Tool    │ │    Tool      │
-        └────────────┘ └────────────┘ └──────────────┘
-               │              │              │
-               └──────────────┼──────────────┘
-                              ▼
-                   ┌─────────────────────┐
-                   │  ML RISK PREDICTION │
-                   │                     │
-                   │ Delay Probability   │
-                   │ Risk Classification │
-                   └──────────┬──────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │        RAG          │
-                   │                     │
-                   │ Supplier Knowledge  │
-                   │ SOPs                │
-                   │ Procedures           │
-                   │ Policies             │
-                   └──────────┬──────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │         LLM         │
-                   │                     │
-                   │ Explanation         │
-                   │ Recommendations     │
-                   │ Operations Briefing │
-                   └──────────┬──────────┘
-                              │
-                              ▼
-                   ┌─────────────────────┐
-                   │   Azure Deployment  │
-                   │                     │
-                   │ Cloud Infrastructure│
-                   └─────────────────────┘
-```
+~~~text
+┌────────────────────────────────────────────────────────────────────┐
+│                         OPERATIONS USER                            │
+│                        React Dashboard                             │
+└───────────────────────────────┬────────────────────────────────────┘
+                                │
+                                ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                         FASTAPI BACKEND                            │
+│                  API / Validation / Orchestration                  │
+└───────────────────────────────┬────────────────────────────────────┘
+                                │
+                                ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                          ML RISK LAYER                             │
+│                                                                    │
+│ DataCo → Feature Engineering → XGBoost → Probability + Risk Level │
+└───────────────────────────────┬────────────────────────────────────┘
+                                │
+                                ▼
+                       ┌──────────────────┐
+                       │     RISK GATE    │
+                       └────────┬─────────┘
+                                │
+                  ┌─────────────┴─────────────┐
+                  │                           │
+             LOW RISK                  MEDIUM / HIGH RISK
+                  │                           │
+                  ▼                           ▼
+             MONITOR /                  AI AGENT
+            QUICK CHECK                      │
+                                             │
+                         ┌───────────────────┼───────────────────┐
+                         ▼                   ▼                   ▼
+                  Shipment Tool       Weather Tool       Supplier Tool
+                         │                   │                   │
+                       DataCo            Open-Meteo       Synthetic MVP
+                         │                   │                   │
+                         └───────────────────┼───────────────────┘
+                                             │
+                                             ▼
+                                  INVESTIGATION EVIDENCE
+                                             │
+                                             ▼
+                                      RAG KNOWLEDGE
+                                             │
+                                             ▼
+                                             LLM
+                                             │
+                                             ▼
+                                  DISRUPTION BRIEFING
+                                             │
+                                             ▼
+                                  OPERATIONS DASHBOARD
+                                             │
+                                             ▼
+                                      HUMAN DECISION
+~~~
+
+### Architecture Responsibilities
+
+| Component | Responsibility |
+| --- | --- |
+| Data layer | Prepare shipment and supporting data |
+| ML model | Estimate shipment delay risk |
+| Risk gate | Decide whether deeper investigation is required |
+| AI agent | Orchestrate the investigation and select relevant tools |
+| Tools | Retrieve operational evidence |
+| RAG | Retrieve documented procedures and operational knowledge |
+| LLM | Explain evidence and generate the briefing |
+| Dashboard | Present risk, evidence, impact and recommendations |
+| Human operator | Make the final operational decision |
 
 ---
 
 ## 5.2 Detailed Architecture
 
-```mermaid
+~~~mermaid
 flowchart TB
 
     USER["Operations User"]
-
     UI["React Dashboard"]
-
     API["FastAPI Backend"]
+
+    DATA["DataCo Supply-Chain Dataset"]
+    FEATURES["Feature Engineering / Preprocessing"]
+    ML["XGBoost Risk Model"]
+    RISK["Risk Gate<br/>LOW / MEDIUM / HIGH"]
 
     AGENT["Supply-Chain AI Agent"]
 
-    SHIPMENT["Shipment Status Tool<br/>get_shipment_status()"]
-
+    SHIPMENT["Shipment Tool<br/>get_shipment_status()"]
     WEATHER["Weather Tool<br/>get_weather()"]
-
     SUPPLIER["Supplier Tool<br/>find_alternative_supplier()"]
 
-    INVENTORY["Inventory Service"]
+    SHIPDATA["DataCo Test Data"]
+    WEATHERDATA["Open-Meteo<br/>Historical Weather"]
+    SUPPLIERDATA["Synthetic Supplier Intelligence"]
 
-    NEWS["External News / Disruption Signals"]
+    EVIDENCE["Investigation Evidence"]
 
-    ML["ML Risk Prediction Model"]
-
-    FEATURES["Feature Engineering"]
-
-    RAG["RAG Pipeline"]
-
-    KB["Knowledge Base<br/>SOPs / Supplier Procedures / Policies"]
-
+    KB["Operational Knowledge Base<br/>SOPs / Policies / Procedures / Playbooks"]
     VECTOR["Vector Store"]
+    RAG["RAG Retrieval"]
 
     LLM["LLM"]
-
     BRIEF["Disruption Briefing"]
-
-    DATA["Supply-Chain Data"]
-
-    AZURE["Azure Cloud Environment"]
+    HUMAN["Human Operational Decision"]
 
     USER --> UI
     UI --> API
-    API --> AGENT
+
+    API --> DATA
+    DATA --> FEATURES
+    FEATURES --> ML
+    ML --> RISK
+
+    RISK -->|LOW| UI
+    RISK -->|MEDIUM / HIGH| AGENT
 
     AGENT --> SHIPMENT
     AGENT --> WEATHER
     AGENT --> SUPPLIER
-    AGENT --> INVENTORY
-    AGENT --> NEWS
 
-    DATA --> FEATURES
-    FEATURES --> ML
+    SHIPMENT --> SHIPDATA
+    WEATHER --> WEATHERDATA
+    SUPPLIER --> SUPPLIERDATA
 
-    SHIPMENT --> ML
-    WEATHER --> ML
-    SUPPLIER --> ML
-    INVENTORY --> ML
+    SHIPMENT --> EVIDENCE
+    WEATHER --> EVIDENCE
+    SUPPLIER --> EVIDENCE
 
-    ML --> AGENT
+    EVIDENCE --> AGENT
+    AGENT --> RAG
 
     KB --> VECTOR
     VECTOR --> RAG
-    AGENT --> RAG
 
     RAG --> LLM
     AGENT --> LLM
+    ML --> LLM
 
     LLM --> BRIEF
     BRIEF --> API
     API --> UI
+    UI --> HUMAN
+~~~
 
-    UI -. deployed on .-> AZURE
-    API -. deployed on .-> AZURE
-    AGENT -. deployed on .-> AZURE
-    ML -. deployed on .-> AZURE
-    RAG -. deployed on .-> AZURE
-```
+### Important Design Rule
 
----
+The system does **not** call every tool for every shipment.
+
+~~~text
+Every shipment
+      ↓
+ML risk prediction
+      ↓
+Risk gate
+      │
+      ├── LOW → monitor / no full investigation
+      │
+      └── MEDIUM/HIGH → AI agent
+                              ↓
+                     Select relevant tools
+                              ↓
+                     Collect evidence
+                              ↓
+                       Retrieve RAG
+                              ↓
+                         LLM briefing
+~~~
+
+### MVP Data Sources
+
+| Component | Source | Purpose |
+| --- | --- | --- |
+| Shipment Tool | DataCo test-period data | Shipment/order information |
+| Weather Tool | Open-Meteo historical data | Weather for destination/date |
+| Supplier Tool | Synthetic supplier dataset | Supplier risk and alternatives |
+| ML Model | DataCo training data | Delay-risk prediction |
+| RAG | Project/SOP/procedure documents | Operational knowledge |
+
+**Important:** the supplier intelligence dataset is synthetic for the MVP and must be labelled as synthetic. DataCo outcome fields such as Late_delivery_risk, Delivery Status, Days for shipping (real), and post-outcome shipping dates are not ML input features.
 
 # 6. Architecture Components
 
@@ -513,37 +549,72 @@ Returns:
 
 ---
 
+
 # 7. End-to-End Workflow
 
-The complete system should follow this process:
+The system follows a **predict → gate → investigate → explain → decide** workflow.
 
-```text
-1. Shipment data enters the system
-             ↓
-2. System retrieves relevant supply-chain signals
-             ↓
-3. Features are generated
-             ↓
-4. ML model calculates delay/disruption probability
-             ↓
-5. High-risk shipment is flagged
-             ↓
-6. AI agent investigates the shipment
-             ↓
-7. Agent calls relevant tools
-             ↓
-8. Agent retrieves relevant procedures through RAG
-             ↓
-9. LLM interprets the collected information
-             ↓
-10. System generates recommended actions
-             ↓
-11. System generates disruption briefing
-             ↓
-12. Operations user reviews the result
-```
+~~~text
+SHIPMENT DATA
+      ↓
+FEATURE ENGINEERING
+      ↓
+XGBOOST ML MODEL
+      ↓
+DELAY PROBABILITY
+      ↓
+RISK GATE
+      │
+      ├──────── LOW ─────────► MONITOR
+      │
+      └──── MEDIUM / HIGH
+                    ↓
+                AI AGENT
+                    │
+          ┌─────────┼─────────┐
+          ▼         ▼         ▼
+       SHIPMENT   WEATHER   SUPPLIER
+          │         │         │
+          └─────────┼─────────┘
+                    ↓
+          INVESTIGATION EVIDENCE
+                    ↓
+                   RAG
+                    ↓
+                   LLM
+                    ↓
+          DISRUPTION BRIEFING
+                    ↓
+          OPERATIONS DASHBOARD
+                    ↓
+             HUMAN DECISION
+~~~
 
----
+### Step 1 — Predict
+
+The ML model evaluates the shipment using information available at the prediction point and produces a delay probability.
+
+### Step 2 — Gate
+
+The risk gate determines whether the shipment requires deeper investigation.
+
+### Step 3 — Investigate
+
+For medium/high-risk shipments, the agent selects the tools relevant to the investigation. It does not automatically call every tool.
+
+### Step 4 — Retrieve Knowledge
+
+RAG retrieves the relevant SOPs, escalation procedures, supplier policies or disruption playbooks.
+
+### Step 5 — Explain
+
+The LLM combines the ML result, tool evidence, business-impact information and retrieved knowledge into an operational briefing.
+
+### Step 6 — Decide
+
+The operations team reviews the briefing and makes the final decision.
+
+> **ML predicts. The agent investigates. Tools provide evidence. RAG provides knowledge. The LLM communicates. Humans decide.**
 
 # 8. Machine Learning Layer
 
