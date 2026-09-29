@@ -7,9 +7,11 @@ from langchain_openai import AzureOpenAIEmbeddings
 
 load_dotenv()
 
-# Priority 3 Fix: Deterministic paths based on the project root
+# Deterministic paths based on the project root
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_DIR = os.getenv("VECTOR_STORE_PATH", os.path.join(BASE_DIR, 'rag', 'vector_store'))
+
+# Option A: Always use the project-relative default (No os.getenv needed)
+DB_DIR = os.path.join(BASE_DIR, 'rag', 'vector_store')
 
 # Priority 4 Fix: Renamed function to reflect broader operational knowledge
 def retrieve_operational_knowledge(query: str, k: int = 3) -> list:
