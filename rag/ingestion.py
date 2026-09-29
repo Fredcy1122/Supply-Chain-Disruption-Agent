@@ -12,11 +12,12 @@ from langchain_openai import AzureOpenAIEmbeddings
 from langchain_chroma import Chroma
 
 load_dotenv()
-
-# Priority 3 Fix: Deterministic paths based on the project root
+# Deterministic paths based on the project root
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOCS_DIR = os.path.join(BASE_DIR, 'rag', 'documents')
-DB_DIR = os.getenv("VECTOR_STORE_PATH", os.path.join(BASE_DIR, 'rag', 'vector_store'))
+
+# Option A: Always use the project-relative default (No os.getenv needed)
+DB_DIR = os.path.join(BASE_DIR, 'rag', 'vector_store')
 
 # The Router: Strictly narrative formats for optimal RAG chunking
 LOADER_MAPPING = {
