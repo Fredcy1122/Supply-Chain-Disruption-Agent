@@ -8,13 +8,15 @@ from langchain_community.document_loaders import (
     Docx2txtLoader
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
+from langchain_openai import AzureOpenAIEmbeddings
 from langchain_chroma import Chroma
 
 load_dotenv()
 
-DOCS_DIR = os.path.join(os.path.dirname(__file__), 'documents')
-DB_DIR = os.getenv("VECTOR_STORE_PATH", "./rag/vector_store")
+# Priority 3 Fix: Deterministic paths based on the project root
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DOCS_DIR = os.path.join(BASE_DIR, 'rag', 'documents')
+DB_DIR = os.getenv("VECTOR_STORE_PATH", os.path.join(BASE_DIR, 'rag', 'vector_store'))
 
 # The Router: Strictly narrative formats for optimal RAG chunking
 LOADER_MAPPING = {
@@ -61,9 +63,15 @@ def ingest_documents():
     
     print(f"Successfully extracted and split text into {len(chunks)} chunks.")
 
-    # Generate math vectors and save to database
-    print("Generating OpenAI embeddings and saving to ChromaDB...")
-    embeddings = OpenAIEmbeddings()
+    # Priority 2 Fix: Generate Azure OpenAI embeddings and save to database
+    print("Generating Azure OpenAI embeddings and saving to ChromaDB...")
+    embeddings = AzureOpenAIEmbeddings(
+        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+        openai_api_version=os.getenv("AZURE_OPENAI_API_VERSION", "2023-05-15"),
+        azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+    )
+    
     Chroma.from_documents(documents=chunks, embedding=embeddings, persist_directory=DB_DIR)
     
     print(f"Success! Vector database saved at: {DB_DIR}")
