@@ -40,7 +40,7 @@ __pycache__/
 
 
 # ============================================================
-# PYTHON ENVIRONMENTS
+# PYTHON VIRTUAL ENVIRONMENTS
 # ============================================================
 
 .venv/
@@ -50,7 +50,7 @@ ENV/
 
 
 # ============================================================
-# TEST, LINT, AND COVERAGE CACHE
+# TESTING, LINTING, AND COVERAGE FILES
 # ============================================================
 
 .pytest_cache/
@@ -72,7 +72,7 @@ htmlcov/
 *.pth
 *.onnx
 
-# Keep only the approved model artifacts required by the backend
+# Keep the approved model artifacts required by the backend
 !models/xgb_model.joblib
 !models/preprocessor.joblib
 
@@ -88,32 +88,20 @@ backend/chroma_db/
 
 
 # ============================================================
-# RAW PROJECT DATA
+# RAW AND PROCESSED PROJECT DATA
 # ============================================================
 
 data/raw/*
-
-# Keep the raw-data folder placeholder
-!data/raw/.gitkeep
-
-
-# ============================================================
-# PROCESSED PROJECT DATA
-# ============================================================
-
 data/processed/*
 
-# Keep the processed-data folder placeholder
+# Retain folder placeholders
+!data/raw/.gitkeep
 !data/processed/.gitkeep
 
-# Keep approved backend datasets
+# Keep the approved Shipment Tool dataset
 !data/processed/shipment_tool_data.csv
 
-# Add these exceptions only when the datasets are created
-!data/processed/supplier_tool_data.csv
-!data/processed/inventory_tool_data.csv
-
-# Keep the existing approved processed datasets if required
+# Keep the existing processed project datasets
 !data/processed/df_model.zip
 !data/processed/df_clean.zip
 
@@ -127,7 +115,7 @@ data/processed/*
 
 
 # ============================================================
-# FRONTEND DEPENDENCIES AND BUILDS
+# FRONTEND DEPENDENCIES AND BUILD OUTPUTS
 # ============================================================
 
 frontend/node_modules/
@@ -153,16 +141,3 @@ backend/temp/
 
 .DS_Store
 Thumbs.db
-Desktop.ini
-
-
-# ============================================================
-# IDE AND EDITOR FILES
-# ============================================================
-
-.vscode/
-.idea/
-
-# Keep shared VS Code settings if added intentionally
-!.vscode/settings.json
-!.vscode/extensions.json
