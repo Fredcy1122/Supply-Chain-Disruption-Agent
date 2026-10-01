@@ -1,20 +1,70 @@
+# ============================================================
+# ENVIRONMENT VARIABLES AND SECRETS
+# ============================================================
 
-# Environment variables and secrets
 .env
 .env.local
 .env.development
 .env.production
+.env.test
 *.env.local
 
-# Azure credentials
+# Keep the safe environment-variable template
+!.env.example
+
+
+# ============================================================
+# AZURE CREDENTIALS
+# ============================================================
+
 .azure/
 
-# API keys and credentials
+
+# ============================================================
+# API KEYS AND CREDENTIAL FILES
+# ============================================================
+
 credentials.json
 secrets.json
 service-account.json
 
-# Machine-learning model artifacts
+
+# ============================================================
+# PYTHON CACHE AND COMPILED FILES
+# ============================================================
+
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+
+# ============================================================
+# PYTHON ENVIRONMENTS
+# ============================================================
+
+.venv/
+venv/
+env/
+ENV/
+
+
+# ============================================================
+# TEST, LINT, AND COVERAGE CACHE
+# ============================================================
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+
+# ============================================================
+# MACHINE-LEARNING MODEL ARTIFACTS
+# ============================================================
+
 *.pkl
 *.joblib
 *.h5
@@ -22,31 +72,97 @@ service-account.json
 *.pth
 *.onnx
 
-# Vector databases
+# Keep only the approved model artifacts required by the backend
+!models/xgb_model.joblib
+!models/preprocessor.joblib
+
+
+# ============================================================
+# VECTOR DATABASES
+# ============================================================
+
 rag/vector_store/
 vector_store/
 chroma_db/
+backend/chroma_db/
 
-# Raw and processed project data
+
+# ============================================================
+# RAW PROJECT DATA
+# ============================================================
+
 data/raw/*
+
+# Keep the raw-data folder placeholder
+!data/raw/.gitkeep
+
+
+# ============================================================
+# PROCESSED PROJECT DATA
+# ============================================================
+
 data/processed/*
 
-# Retain folder placeholders
-!data/raw/.gitkeep
+# Keep the processed-data folder placeholder
 !data/processed/.gitkeep
 
-# Jupyter notebook checkpoints
-.ipynb_checkpoints/
+# Keep approved backend datasets
+!data/processed/shipment_tool_data.csv
 
-# Frontend dependencies and builds
+# Add these exceptions only when the datasets are created
+!data/processed/supplier_tool_data.csv
+!data/processed/inventory_tool_data.csv
+
+# Keep the existing approved processed datasets if required
+!data/processed/df_model.zip
+!data/processed/df_clean.zip
+
+
+# ============================================================
+# JUPYTER NOTEBOOK FILES
+# ============================================================
+
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+
+# ============================================================
+# FRONTEND DEPENDENCIES AND BUILDS
+# ============================================================
+
 frontend/node_modules/
 frontend/build/
 frontend/dist/
+frontend/.cache/
 
-# Backend cache and temporary files
-backend/__pycache__/
+
+# ============================================================
+# BACKEND TEMPORARY FILES
+# ============================================================
+
 *.log
+logs/
+backend/logs/
+backend/tmp/
+backend/temp/
 
-# Operating-system files
+
+# ============================================================
+# OPERATING-SYSTEM FILES
+# ============================================================
+
 .DS_Store
 Thumbs.db
+Desktop.ini
+
+
+# ============================================================
+# IDE AND EDITOR FILES
+# ============================================================
+
+.vscode/
+.idea/
+
+# Keep shared VS Code settings if added intentionally
+!.vscode/settings.json
+!.vscode/extensions.json
