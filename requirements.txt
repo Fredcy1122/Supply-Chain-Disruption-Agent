@@ -4,7 +4,7 @@ pydantic
 python-dotenv
 pandas
 numpy
-scikit-learn
+scikit-learn==1.6.1
 joblib
 requests
 httpx
@@ -16,4 +16,4 @@ langchain-chroma
 pypdf
 docx2txt
 pydantic-settings
-xgboost
+xgboost==3.1.1

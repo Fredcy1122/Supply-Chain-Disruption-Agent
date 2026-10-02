@@ -5,6 +5,10 @@ def generate_rag_briefing(shipment_id: str, risk_level: RiskLevel, delay_probabi
     """
     Takes the raw evidence found by the AI Agent, queries the RAG ChromaDB for relevant SOPs,
     and uses Azure OpenAI to synthesize a final mitigation briefing.
+
+    RAG retrieval and Azure OpenAI are not yet connected: the SOP citations
+    and recommended actions are fixed placeholders, and the summary is a
+    template that mentions only the evidence actually collected.
     """
     shipment = get_shipment_by_id(shipment_id)
     
@@ -27,15 +31,26 @@ def generate_rag_briefing(shipment_id: str, risk_level: RiskLevel, delay_probabi
     # prompt = f"Given SOPs: {simulated_sops}, and Evidence: {evidence}, generate a summary..."
     
     # Fallback LLM generation for architectural testing:
+    # Only evidence that was actually collected is mentioned.
     summary = (
-        f"Shipment {shipment_id} ({shipment.product_category} bound for {shipment.destination}) "
-        f"faces a {risk_level.value} risk ({delay_probability*100}%). RAG policy suggests immediate "
-        f"intervention based on environmental evidence: {evidence.weather_summary}"
+        f"Shipment {shipment_id} ({shipment.category} bound for {shipment.destination_city}, {shipment.destination_country}) "
+        f"faces a {risk_level.value} risk ({delay_probability:.1%}). RAG policy suggests immediate intervention"
     )
-    
+    if evidence.weather_summary:
+        summary += f" based on environmental evidence: {evidence.weather_summary}"
+    else:
+        summary += "."
+    if evidence.historical_delay_summary:
+        summary += f" {evidence.historical_delay_summary}"
+
+    if evidence.inventory_coverage_days is not None:
+        inventory_action = f"Trigger SOP-12: Utilize inventory buffer of {evidence.inventory_coverage_days} days to fulfill active destination orders."
+    else:
+        inventory_action = "Trigger SOP-12: Confirm the available inventory buffer before fulfilling active destination orders (inventory coverage not yet available)."
+
     recommended_actions = [
         "Trigger SOP-04: Reroute via secondary transit hub immediately.",
-        f"Trigger SOP-12: Utilize inventory buffer of {evidence.inventory_coverage_days} days to fulfill active destination orders."
+        inventory_action,
     ]
 
     return DisruptionBriefingResponse(

@@ -11,7 +11,7 @@ from backend.services.prediction_service import (
     predict_delay_risk,
 )
 from backend.services.shipment_service import (
-    ShipmentDataError,
+    ShipmentServiceError,
     ShipmentNotFoundError,
 )
 
@@ -48,7 +48,7 @@ def evaluate_shipment_risk(
             detail=str(exc),
         ) from exc
 
-    except ShipmentDataError as exc:
+    except ShipmentServiceError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),

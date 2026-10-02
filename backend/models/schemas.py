@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -14,6 +14,11 @@ class RiskLevel(str, Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
+
+
+class ToolCallStatus(str, Enum):
+    SUCCESS = "success"
+    ERROR = "error"
 
 
 # ============================================================
@@ -224,6 +229,14 @@ class ToolEvidence(BaseModel):
         description="Summary produced from the Shipment Tool response",
     )
 
+    historical_delay_summary: Optional[str] = Field(
+        default=None,
+        description=(
+            "Historical delay rates for the shipment's product, market "
+            "and shipping mode"
+        ),
+    )
+
     weather_summary: Optional[str] = Field(
         default=None,
         description="Evidence returned by the Weather Tool",
@@ -238,6 +251,38 @@ class ToolEvidence(BaseModel):
         default=None,
         ge=0,
         description="Available inventory coverage measured in days",
+    )
+
+
+class ToolCall(BaseModel):
+    """
+    One tool call made during an investigation, kept as evidence.
+    """
+
+    tool: str = Field(
+        ...,
+        description="Name of the tool that was called",
+        examples=["get_shipment"],
+    )
+
+    input: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Arguments passed to the tool",
+    )
+
+    output: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Data returned by the tool; empty when the call failed",
+    )
+
+    status: ToolCallStatus = Field(
+        ...,
+        description="Whether the tool call succeeded",
+    )
+
+    error: Optional[str] = Field(
+        default=None,
+        description="Error message when the tool call failed",
     )
 
 
@@ -271,4 +316,17 @@ class DisruptionBriefingResponse(BaseModel):
     recommended_actions: List[str] = Field(
         default_factory=list,
         description="Recommended actions for logistics operators",
+    )
+
+    tool_trace: List[ToolCall] = Field(
+        default_factory=list,
+        description="Tool calls made during the investigation, in order",
+    )
+
+    limitations: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Evidence that could not be collected and other caveats "
+            "on this briefing"
+        ),
     )
