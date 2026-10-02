@@ -1,43 +1,274 @@
+from datetime import datetime
 from enum import Enum
 from typing import List, Optional
-from pydantic import BaseModel, Field
 
-# 1. Enums for strict categorization
+from pydantic import BaseModel, ConfigDict, Field
+
+
+# ============================================================
+# ENUMS
+# ============================================================
+
+
 class RiskLevel(str, Enum):
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
 
-# 2. Base Shipment Schema (Representing DataCo shipment fields)
+
+# ============================================================
+# SHIPMENT SCHEMAS
+# ============================================================
+
+
 class ShipmentBase(BaseModel):
-    shipment_id: str = Field(..., description="Unique shipment tracking identifier")
-    product_category: str = Field(..., description="Category of goods being transported")
-    destination: str = Field(..., description="Destination city/country")
-    shipping_mode: str = Field(..., description="Standard Class, First Class, Second Class, etc.")
-    days_for_shipping_real: Optional[float] = Field(None, description="Actual transit time if completed")
-    days_for_shipment_scheduled: float = Field(..., description="Target transit schedule")
+    """
+    Leakage-safe shipment information returned by the Shipment Tool.
+
+    The fields in this schema correspond to the columns available in
+    data/processed/shipment_tool_data.csv.
+    """
+
+    model_config = ConfigDict(
+        extra="ignore",
+        str_strip_whitespace=True,
+    )
+
+    order_id: int = Field(
+        ...,
+        description="DataCo order identifier",
+    )
+
+    shipment_id: int = Field(
+        ...,
+        description="Unique order-item-level shipment identifier",
+    )
+
+    shipment_reference: str = Field(
+        ...,
+        pattern=r"^SHP-\d+$",
+        description="Public shipment reference in SHP-<shipment_id> format",
+        examples=["SHP-153440"],
+    )
+
+    product_name: str = Field(
+        ...,
+        description="Name of the product being shipped",
+    )
+
+    category: str = Field(
+        ...,
+        description="Product category",
+    )
+
+    department: str = Field(
+        ...,
+        description="Department associated with the product",
+    )
+
+    market: str = Field(
+        ...,
+        description="Commercial market associated with the shipment",
+    )
+
+    customer_country: str = Field(
+        ...,
+        description="Country associated with the customer",
+    )
+
+    destination_country: str = Field(
+        ...,
+        description="Shipment destination country",
+    )
+
+    destination_region: str = Field(
+        ...,
+        description="Shipment destination region",
+    )
+
+    destination_state: str = Field(
+        ...,
+        description="Shipment destination state or province",
+    )
+
+    destination_city: str = Field(
+        ...,
+        description="Shipment destination city",
+    )
+
+    shipping_mode: str = Field(
+        ...,
+        description="Shipment service mode",
+    )
+
+    scheduled_shipping_days: int = Field(
+        ...,
+        ge=0,
+        description="Planned number of days for shipment delivery",
+    )
+
+    quantity: int = Field(
+        ...,
+        ge=0,
+        description="Quantity of products included in the shipment record",
+    )
+
+    product_price: float = Field(
+        ...,
+        ge=0,
+        description="Unit price of the product",
+    )
+
+    sales: float = Field(
+        ...,
+        ge=0,
+        description="Sales value associated with the shipment record",
+    )
+
+    discount: float = Field(
+        ...,
+        ge=0,
+        description="Discount value associated with the shipment record",
+    )
+
+    order_date: datetime = Field(
+        ...,
+        description="Date and time when the order was placed",
+    )
+
+    latitude: float = Field(
+        ...,
+        ge=-90,
+        le=90,
+        description="Latitude available in the shipment dataset",
+    )
+
+    longitude: float = Field(
+        ...,
+        ge=-180,
+        le=180,
+        description="Longitude available in the shipment dataset",
+    )
+
+    historical_product_delay_rate: float = Field(
+        ...,
+        ge=0,
+        le=1,
+        description="Historical delay rate associated with the product",
+    )
+
+    historical_market_delay_rate: float = Field(
+        ...,
+        ge=0,
+        le=1,
+        description="Historical delay rate associated with the market",
+    )
+
+    historical_shipping_mode_delay_rate: float = Field(
+        ...,
+        ge=0,
+        le=1,
+        description="Historical delay rate associated with the shipping mode",
+    )
+
 
 class ShipmentResponse(ShipmentBase):
-    current_status: str = Field("Pending", description="Current transit status")
+    """
+    API response returned for a successful shipment lookup.
+    """
 
-# 3. Machine Learning Prediction Schema (The Risk Gate output)
+    pass
+
+
+# ============================================================
+# MACHINE-LEARNING PREDICTION SCHEMAS
+# ============================================================
+
+
 class PredictionResponse(BaseModel):
-    shipment_id: str
-    delay_probability: float = Field(..., ge=0.0, le=1.0, description="Model delay probability score between 0 and 1")
-    risk_level: RiskLevel = Field(..., description="LOW (<0.40), MEDIUM (0.40-0.69), or HIGH (>=0.70)")
-    requires_investigation: bool = Field(..., description="True if risk is MEDIUM or HIGH, triggering the AI Agent")
+    shipment_id: str = Field(
+        ...,
+        description="Public shipment reference",
+        examples=["SHP-153440"],
+    )
 
-# 4. Investigation & Briefing Schema (AI Agent & RAG output)
+    delay_probability: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Model-estimated probability of shipment delay",
+    )
+
+    risk_level: RiskLevel = Field(
+        ...,
+        description="Operational risk classification",
+    )
+
+    requires_investigation: bool = Field(
+        ...,
+        description=(
+            "Indicates whether the shipment should proceed to "
+            "agent investigation"
+        ),
+    )
+
+
+# ============================================================
+# AGENT EVIDENCE AND BRIEFING SCHEMAS
+# ============================================================
+
+
 class ToolEvidence(BaseModel):
-    weather_summary: Optional[str] = None
-    supplier_status: Optional[str] = None
-    inventory_coverage_days: Optional[int] = None
+    shipment_summary: Optional[str] = Field(
+        default=None,
+        description="Summary produced from the Shipment Tool response",
+    )
+
+    weather_summary: Optional[str] = Field(
+        default=None,
+        description="Evidence returned by the Weather Tool",
+    )
+
+    supplier_status: Optional[str] = Field(
+        default=None,
+        description="Evidence returned by the Supplier Tool",
+    )
+
+    inventory_coverage_days: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="Available inventory coverage measured in days",
+    )
+
 
 class DisruptionBriefingResponse(BaseModel):
-    shipment_id: str
+    shipment_id: str = Field(
+        ...,
+        description="Public shipment reference",
+        examples=["SHP-153440"],
+    )
+
     risk_level: RiskLevel
-    delay_probability: float
+
+    delay_probability: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+    )
+
     evidence: ToolEvidence
-    rag_policy_citations: List[str] = Field(default_factory=list, description="Retrieved SOP policy references")
-    summary: str = Field(..., description="Executive summary of the disruption risk")
-    recommended_actions: List[str] = Field(..., description="Actionable next steps for logistics operators")
+
+    rag_policy_citations: List[str] = Field(
+        default_factory=list,
+        description="Operational procedure references retrieved by RAG",
+    )
+
+    summary: str = Field(
+        ...,
+        description="Executive summary of the disruption investigation",
+    )
+
+    recommended_actions: List[str] = Field(
+        default_factory=list,
+        description="Recommended actions for logistics operators",
+    )
