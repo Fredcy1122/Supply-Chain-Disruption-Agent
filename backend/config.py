@@ -67,7 +67,15 @@ class Settings(BaseSettings):
     azure_openai_api_version: str | None = None
 
     # Weather Tool
-    weather_api_base_url: str | None = None
+    # Open-Meteo historical archive and geocoding. No API key is required.
+    weather_api_base_url: str = (
+        "https://archive-api.open-meteo.com/v1/archive"
+    )
+    weather_geocoding_url: str = (
+        "https://geocoding-api.open-meteo.com/v1/search"
+    )
+    weather_timeout_seconds: float = 10.0
+    # Not used by Open-Meteo; kept for a provider that requires a key.
     weather_api_key: str | None = None
 
     # Supplier Tool

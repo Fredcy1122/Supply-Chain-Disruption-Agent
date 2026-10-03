@@ -2,7 +2,57 @@ import pandas as pd
 import pytest
 
 from backend.models.schemas import PredictionResponse, RiskLevel
-from backend.services import agent_tools, shipment_service
+from backend.services import (
+    agent_service,
+    agent_tools,
+    shipment_service,
+    weather_service,
+)
+
+
+WEATHER_EVIDENCE = {
+    "destination": "Vassouras, Brazil",
+    "latitude": -22.4036,
+    "longitude": -43.6625,
+    "window_start": "2017-05-01",
+    "window_end": "2017-05-05",
+    "window_basis": agent_tools.WEATHER_WINDOW_BASIS,
+    "daily": [],
+    "precipitation_total_mm": 9.2,
+    "precipitation_max_mm": 8.9,
+    "max_wind_speed_kmh": 17.9,
+    "worst_weather_code": 61,
+    "worst_weather_description": "slight rain",
+    "severity": "low",
+    "source": "Open-Meteo historical archive",
+}
+
+
+@pytest.fixture(autouse=True)
+def no_live_weather(monkeypatch):
+    """
+    Keep every test offline and independent.
+
+    HTTP calls fail unless a test mocks them, cached weather lookups are
+    cleared, and the agent receives fixed weather evidence unless a test
+    replaces it.
+    """
+
+    def network_blocked(*args, **kwargs):
+        raise AssertionError("Tests must not call the live weather API.")
+
+    monkeypatch.setattr(weather_service.requests, "get", network_blocked)
+    monkeypatch.setattr(
+        agent_service,
+        "get_destination_weather",
+        lambda shipment: WEATHER_EVIDENCE,
+    )
+
+    weather_service.geocode_city.cache_clear()
+    weather_service.get_daily_weather.cache_clear()
+    yield
+    weather_service.geocode_city.cache_clear()
+    weather_service.get_daily_weather.cache_clear()
 
 
 SHIPMENT_RECORD = {

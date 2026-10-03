@@ -16,3 +16,7 @@ class ModelInferenceError(BackendServiceError):
 
 class ThresholdConfigurationError(BackendServiceError):
     """Raised when the configured decision threshold is invalid."""
+
+
+class WeatherServiceError(BackendServiceError):
+    """Raised when weather evidence cannot be retrieved or understood."""

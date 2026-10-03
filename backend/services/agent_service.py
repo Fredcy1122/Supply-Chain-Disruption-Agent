@@ -9,17 +9,25 @@ from backend.models.schemas import (
     ToolCallStatus,
     ToolEvidence,
 )
+from backend.exceptions import WeatherServiceError
 from backend.services.agent_tools import (
     get_delay_risk,
+    get_destination_weather,
     get_historical_delay_context,
     get_shipment,
 )
 from backend.services.briefing_service import generate_rag_briefing
 
 
+# Applies to every briefing, whether or not weather was collected.
+WEATHER_SCOPE_LIMITATION = (
+    "Weather describes the geocoded destination city over an approximate "
+    "window (order date plus scheduled shipping days), not the full "
+    "shipment route."
+)
+
 # Evidence that this version of the investigation does not collect yet.
 UNCOLLECTED_EVIDENCE_LIMITATIONS = [
-    "Weather evidence was not collected: the weather tool is not yet implemented.",
     "Supplier status was not collected: no supplier data source is available.",
     "Inventory coverage was not collected: no inventory data source is available.",
     "Policy citations and recommended actions come from the briefing "
@@ -94,13 +102,25 @@ def _summarize_historical_context(context: dict[str, Any]) -> str:
     )
 
 
+def _summarize_weather(weather: dict[str, Any]) -> str:
+    return (
+        f"Observed weather in {weather['destination']}, "
+        f"{weather['window_start']} to {weather['window_end']}: "
+        f"{weather['precipitation_total_mm']:.1f} mm precipitation "
+        f"(max {weather['precipitation_max_mm']:.1f} mm/day), "
+        f"max wind {weather['max_wind_speed_kmh']:.1f} km/h; worst "
+        f"condition {weather['worst_weather_description']} "
+        f"({weather['severity']} severity)."
+    )
+
+
 def run_investigation(shipment_id: str) -> DisruptionBriefingResponse:
     """
     Orchestrates the AI Agent investigation. Strictly enforces the Risk Gate:
     only shipments flagged as requiring investigation are processed.
 
-    Flow: risk gate, shipment facts, historical delay context, evidence,
-    briefing. Every tool call is recorded in the response's tool_trace.
+    Flow: risk gate, shipment facts, historical delay context,
+    destination weather, evidence, briefing. Every tool call is recorded in the response's tool_trace.
     The risk gate and shipment facts are required; other evidence that
     cannot be collected is reported in limitations.
     """
@@ -149,15 +169,32 @@ def run_investigation(shipment_id: str) -> DisruptionBriefingResponse:
             f"Historical delay context was not collected: {exc}"
         )
 
-    # 4. Build the evidence from tool outputs only. Weather, supplier and
+    # 4. Gather destination weather. Optional, like step 3: an external
+    # API outage must not block the investigation. Only the weather
+    # service's own error is expected here; anything else is a defect.
+    weather_summary = None
+    try:
+        weather = _call_tool(
+            tool_trace,
+            "get_destination_weather",
+            {"shipment_id": shipment_reference},
+            lambda: get_destination_weather(shipment),
+        )
+        weather_summary = _summarize_weather(weather)
+    except WeatherServiceError as exc:
+        limitations.append(f"Weather evidence was not collected: {exc}")
+
+    # 5. Build the evidence from tool outputs only. Supplier and
     # inventory fields stay empty rather than holding placeholder values.
     evidence = ToolEvidence(
         shipment_summary=_summarize_shipment(shipment),
         historical_delay_summary=historical_delay_summary,
+        weather_summary=weather_summary,
     )
+    limitations.append(WEATHER_SCOPE_LIMITATION)
     limitations.extend(UNCOLLECTED_EVIDENCE_LIMITATIONS)
 
-    # 5. Generate the briefing with the existing briefing service
+    # 6. Generate the briefing with the existing briefing service
     briefing = generate_rag_briefing(
         shipment_id=shipment_reference,
         risk_level=prediction.risk_level,
