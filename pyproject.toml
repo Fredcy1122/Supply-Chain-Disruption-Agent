@@ -35,3 +35,8 @@ dev = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["backend", "rag"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests requiring external services or persisted integration assets",
+]

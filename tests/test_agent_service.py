@@ -88,16 +88,36 @@ def test_limitations_list_uncollected_evidence(high_risk):
     assert briefing.limitations == STANDING_LIMITATIONS
 
 
-def test_weather_step_populates_weather_evidence(high_risk):
-    briefing = run_investigation("SHP-153440")
-
-    assert briefing.evidence.weather_summary == (
-        "Observed weather in Vassouras, Brazil, 2017-05-01 to 2017-05-05: "
-        "9.2 mm precipitation (max 8.9 mm/day), max wind 17.9 km/h; "
-        "worst condition slight rain (low severity)."
+def test_weather_step_populates_weather_evidence(
+    high_risk,):
+    briefing = run_investigation(
+        "SHP-153440"
     )
-    assert "environmental evidence: Observed weather" in briefing.summary
 
+    expected_weather_summary = (
+        "Observed weather in Vassouras, Brazil, "
+        "2017-05-01 to 2017-05-05: "
+        "9.2 mm precipitation "
+        "(max 8.9 mm/day), "
+        "max wind 17.9 km/h; "
+        "worst condition slight rain "
+        "(low severity)."
+    )
+
+    assert (
+        briefing.evidence.weather_summary
+        == expected_weather_summary
+    )
+
+    assert (
+        expected_weather_summary
+        in briefing.summary
+    )
+
+    assert any(
+        citation.endswith(".pdf")
+        for citation in briefing.rag_policy_citations
+    )
 
 def test_weather_failure_becomes_limitation(high_risk, monkeypatch):
     def weather_unavailable(shipment):

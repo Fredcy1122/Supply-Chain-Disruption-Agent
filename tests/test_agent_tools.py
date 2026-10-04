@@ -51,21 +51,48 @@ def test_get_delay_risk_returns_prediction_service_result(monkeypatch):
     assert calls == ["SHP-153440"]
 
 
-def test_get_historical_delay_context_reports_recorded_rates(shipment):
-    context = get_historical_delay_context(shipment)
+def test_get_historical_delay_context_reports_recorded_rates(
+    shipment,
+):
+    context = get_historical_delay_context(
+        shipment
+    )
 
-    assert context == {
-        "product_name": "Trail Running Shoe",
-        "market": "LATAM",
-        "shipping_mode": "Standard Class",
-        "scheduled_shipping_days": 4,
-        "historical_delay_rates": {
-            "product": 0.57,
-            "market": 0.55,
-            "shipping_mode": 0.38,
-        },
-        "highest_delay_rate_factor": "product",
+    assert context["product_name"] == (
+        "Trail Running Shoe"
+    )
+
+    assert context["market"] == "LATAM"
+
+    assert context["shipping_mode"] == (
+        "Standard Class"
+    )
+
+    assert (
+        context["scheduled_shipping_days"]
+        == 4
+    )
+
+    assert context["historical_delay_rates"] == {
+        "product": 0.57,
+        "market": 0.55,
+        "shipping_mode": 0.38,
     }
+
+    assert (
+        context["highest_delay_rate_factor"]
+        == "product"
+    )
+
+    assert (
+        context["highest_delay_rate"]
+        == 0.57
+    )
+
+    assert (
+        context["source"]
+        == "shipment_tool_data.csv"
+    )
 
 
 def test_get_historical_delay_context_identifies_highest_factor(shipment):
