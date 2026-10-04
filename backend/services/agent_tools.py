@@ -73,7 +73,7 @@ def get_historical_delay_context(
 
     highest_factor = max(
         delay_rates,
-        key=delay_rates.get,
+        key=lambda factor: delay_rates[factor],
     )
 
     return {
@@ -83,6 +83,8 @@ def get_historical_delay_context(
         "scheduled_shipping_days": shipment.scheduled_shipping_days,
         "historical_delay_rates": delay_rates,
         "highest_delay_rate_factor": highest_factor,
+        "highest_delay_rate": delay_rates[highest_factor],
+        "source": "shipment_tool_data.csv",
     }
 
 

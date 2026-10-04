@@ -4,7 +4,6 @@ from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-# Absolute path to the repository root.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -19,6 +18,14 @@ class Settings(BaseSettings):
     app_environment: str = "development"
     debug: bool = False
     mock_mode: bool = False
+
+    # ========================================================
+    # BACKEND
+    # ========================================================
+
+    backend_host: str = "0.0.0.0"
+    backend_port: int = 8000
+    backend_url: str = "http://localhost:8000"
 
     # ========================================================
     # FRONTEND
@@ -60,13 +67,33 @@ class Settings(BaseSettings):
         / "preprocessor.joblib"
     )
 
-    # Final operational thresholds.
     risk_threshold: float = 0.40
     high_risk_threshold: float = 0.70
 
     # ========================================================
+    # WEATHER TOOL
+    # ========================================================
+
+    weather_api_base_url: str = (
+        "https://archive-api.open-meteo.com/v1/archive"
+    )
+
+    weather_geocoding_url: str = (
+        "https://geocoding-api.open-meteo.com/v1/search"
+    )
+
+    weather_timeout_seconds: float = 10.0
+    weather_api_key: str | None = None
+
+    # ========================================================
     # RAG
     # ========================================================
+
+    rag_documents_path: Path = (
+        PROJECT_ROOT
+        / "rag"
+        / "documents"
+    )
 
     vector_store_path: Path = (
         PROJECT_ROOT
@@ -76,7 +103,9 @@ class Settings(BaseSettings):
 
     rag_collection_name: str = "operational_sops"
 
- 
+    rag_chunk_size: int = 1000
+    rag_chunk_overlap: int = 200
+    rag_top_k: int = 5
 
     # ========================================================
     # AZURE OPENAI
@@ -89,24 +118,8 @@ class Settings(BaseSettings):
     azure_openai_chat_deployment: str | None = None
     azure_openai_embedding_deployment: str | None = None
 
-    # Retained temporarily for backward compatibility.
+    # Temporary compatibility with Joy's previous RAG code.
     azure_openai_deployment_name: str | None = None
-
-    # ========================================================
-    # WEATHER TOOL
-    # ========================================================
-
-    # Open-Meteo services do not require an API key.
-    weather_api_base_url: str = (
-        "https://archive-api.open-meteo.com/v1/archive"
-    )
-
-    weather_geocoding_url: str = (
-        "https://geocoding-api.open-meteo.com/v1/search"
-    )
-
-    weather_timeout_seconds: float = 10.0
-    weather_api_key: str | None = None
 
     # ========================================================
     # SUPPLIER TOOL
