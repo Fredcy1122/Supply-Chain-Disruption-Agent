@@ -1,12 +1,14 @@
 import { RiskBadge, Meter, pct, money } from "./ui.jsx";
 
 export default function Home({ shipments, onOpen }) {
-  const atRisk = shipments.filter((s) => ["high", "critical"].includes(s.riskLevel));
-  const cost = shipments.reduce((a, s) => a + s.impact.cost, 0);
+  const atRisk = shipments.filter((s) => s.requiresInvestigation);
+  // Impact is not provided by the backend yet; show "Not available" until it is.
+  const withImpact = shipments.filter((s) => s.impact?.cost != null);
+  const cost = withImpact.length ? withImpact.reduce((a, s) => a + s.impact.cost, 0) : null;
   const avg = shipments.reduce((a, s) => a + s.delayProbability, 0) / (shipments.length || 1);
   const stats = [
     ["Active shipments", shipments.length],
-    ["At high risk or worse", atRisk.length],
+    ["Need investigation", atRisk.length],
     ["Average delay probability", pct(avg)],
     ["Value at risk", money(cost)],
   ];
@@ -24,7 +26,7 @@ export default function Home({ shipments, onOpen }) {
         {[...shipments].sort((a, b) => b.delayProbability - a.delayProbability).slice(0, 4).map((s) => (
           <button key={s.id} className="row" onClick={() => onOpen(s.id)}>
             <strong>{s.id}</strong>
-            <span>{s.details.origin} to {s.details.destination}</span>
+            <span>To {s.details.destination}</span>
             <Meter value={s.delayProbability} level={s.riskLevel} />
             <em>{pct(s.delayProbability)}</em>
             <RiskBadge level={s.riskLevel} />

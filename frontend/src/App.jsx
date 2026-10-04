@@ -14,13 +14,17 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [decisions, setDecisions] = useState({});
   const [error, setError] = useState(null);
+  const [loadFailures, setLoadFailures] = useState([]);
 
   useEffect(() => {
-    getShipments().then((d) => { setShipments(d); setSelectedId(d[0]?.id); }).catch((e) => setError(e.message));
+    getShipments()
+      .then(({ shipments: d, failures }) => { setShipments(d); setSelectedId(d[0]?.id); setLoadFailures(failures); })
+      .catch((e) => setError(e.message));
   }, []);
 
   const selected = shipments.find((s) => s.id === selectedId);
-  const setStatus = (id, st) => setShipments((l) => l.map((s) => (s.id === id ? { ...s, investigationStatus: st } : s)));
+  // Merges investigation status and results into one shipment.
+  const updateShipment = (id, patch) => setShipments((l) => l.map((s) => (s.id === id ? { ...s, ...patch } : s)));
   const open = (id) => { setSelectedId(id); setTab("Shipments"); };
 
   return (
@@ -37,13 +41,14 @@ export default function App() {
             </select>
           </label>
         )}
-        {error && <div className="empty err">{error}. Check that the backend is running or set VITE_USE_MOCK=true.</div>}
+        {error && <div className="empty err">{error}. Check that the backend is running on port 8000.</div>}
+        {loadFailures.length > 0 && <div className="empty err">Some shipments could not be loaded: {loadFailures.join("; ")}</div>}
         {!error && !shipments.length && <div className="empty">Loading shipments…</div>}
         {shipments.length > 0 && (
           <>
             {tab === "Home" && <Home shipments={shipments} onOpen={open} />}
             {tab === "Shipments" && <Shipments shipments={shipments} selectedId={selectedId} onSelect={setSelectedId} />}
-            {tab === "Investigation" && <Investigation shipment={selected} onStatus={setStatus} />}
+            {tab === "Investigation" && <Investigation shipment={selected} onUpdate={updateShipment} />}
             {tab === "Actions" && <Actions shipment={selected} decisions={decisions} onDecide={(id, d) => setDecisions((x) => ({ ...x, [id]: d }))} />}
             {tab === "Briefings" && <Briefings shipment={selected} />}
           </>

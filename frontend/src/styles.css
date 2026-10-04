@@ -31,7 +31,7 @@ main{padding:36px clamp(16px,4vw,48px);max-width:1080px;width:100%}
 .btn{background:var(--ink);color:var(--paper);border:0;border-radius:8px;padding:8px 16px;font-weight:600}.btn:disabled{opacity:.5;cursor:default}.btn.ghost{background:none;color:var(--ink);border:1px solid var(--line)}
 .trace{list-style:none;margin:20px 0 0;padding:0 0 0 18px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:14px}
 .trace li{position:relative;display:flex;flex-direction:column;gap:2px}.trace li:before{content:"";position:absolute;left:-25px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--teal)}
-.trace .tool_result:before{background:var(--low)}.trace .message:before{background:var(--high)}.trace small{color:var(--mute)}
+.trace .done:before{background:var(--low)}.trace .complete:before{background:var(--high)}.trace .failed:before{background:var(--critical)}.trace small{color:var(--mute)}
 .trace code{background:var(--paper);padding:6px 10px;border-radius:6px;font-size:13px;word-break:break-word}
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:16px}
 .card{border:1px solid var(--line);border-radius:12px;padding:18px;background:var(--paper)}.card h3{margin-top:0}.card.dismissed{opacity:.5}.card.approved{border-color:var(--low)}
