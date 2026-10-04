@@ -1,20 +1,70 @@
+# ============================================================
+# ENVIRONMENT VARIABLES AND SECRETS
+# ============================================================
 
-# Environment variables and secrets
 .env
 .env.local
 .env.development
 .env.production
+.env.test
 *.env.local
 
-# Azure credentials
+# Keep the safe environment-variable template
+!.env.example
+
+
+# ============================================================
+# AZURE CREDENTIALS
+# ============================================================
+
 .azure/
 
-# API keys and credentials
+
+# ============================================================
+# API KEYS AND CREDENTIAL FILES
+# ============================================================
+
 credentials.json
 secrets.json
 service-account.json
 
-# Machine-learning model artifacts
+
+# ============================================================
+# PYTHON CACHE AND COMPILED FILES
+# ============================================================
+
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+
+# ============================================================
+# PYTHON VIRTUAL ENVIRONMENTS
+# ============================================================
+
+.venv/
+venv/
+env/
+ENV/
+
+
+# ============================================================
+# TESTING, LINTING, AND COVERAGE FILES
+# ============================================================
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+
+# ============================================================
+# MACHINE-LEARNING MODEL ARTIFACTS
+# ============================================================
+
 *.pkl
 *.joblib
 *.h5
@@ -22,12 +72,25 @@ service-account.json
 *.pth
 *.onnx
 
-# Vector databases
+# Keep the approved model artifacts required by the backend
+!models/xgb_model.joblib
+!models/preprocessor.joblib
+
+
+# ============================================================
+# VECTOR DATABASES
+# ============================================================
+
 rag/vector_store/
 vector_store/
 chroma_db/
+backend/chroma_db/
 
-# Raw and processed project data
+
+# ============================================================
+# RAW AND PROCESSED PROJECT DATA
+# ============================================================
+
 data/raw/*
 data/processed/*
 
@@ -35,18 +98,46 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
-# Jupyter notebook checkpoints
-.ipynb_checkpoints/
+# Keep the approved Shipment Tool dataset
+!data/processed/shipment_tool_data.csv
 
-# Frontend dependencies and builds
+# Keep the existing processed project datasets
+!data/processed/df_model.zip
+!data/processed/df_clean.zip
+
+
+# ============================================================
+# JUPYTER NOTEBOOK FILES
+# ============================================================
+
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+
+# ============================================================
+# FRONTEND DEPENDENCIES AND BUILD OUTPUTS
+# ============================================================
+
 frontend/node_modules/
 frontend/build/
 frontend/dist/
+frontend/.cache/
 
-# Backend cache and temporary files
-backend/__pycache__/
+
+# ============================================================
+# BACKEND TEMPORARY FILES
+# ============================================================
+
 *.log
+logs/
+backend/logs/
+backend/tmp/
+backend/temp/
 
-# Operating-system files
+
+# ============================================================
+# OPERATING-SYSTEM FILES
+# ============================================================
+
 .DS_Store
 Thumbs.db
