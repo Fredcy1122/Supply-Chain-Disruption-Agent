@@ -1,4 +1,5 @@
-from typing import Any, Callable
+from dataclasses import dataclass
+from typing import Any, Callable, Generator
 
 from pydantic import BaseModel
 
@@ -9,7 +10,10 @@ from backend.models.schemas import (
     ToolCallStatus,
     ToolEvidence,
 )
-from backend.exceptions import WeatherServiceError
+from backend.exceptions import (
+    InvestigationNotRequiredError,
+    WeatherServiceError,
+)
 from backend.services.agent_tools import (
     get_delay_risk,
     get_destination_weather,
@@ -35,14 +39,50 @@ UNCOLLECTED_EVIDENCE_LIMITATIONS = [
 ]
 
 
+# Progress events reported while an investigation runs.
+TOOL_START = "tool_start"
+TOOL_COMPLETE = "tool_complete"
+TOOL_ERROR = "tool_error"
+MESSAGE = "message"
+DONE = "done"
+
+
+@dataclass(frozen=True)
+class InvestigationEvent:
+    """
+    One step of an investigation, reported as it happens.
+
+    ``data`` is JSON-serializable so the event can be sent to a client
+    without further conversion.
+    """
+
+    event: str
+    data: dict[str, Any]
+
+
+def _tool_event(event: str, call: ToolCall) -> InvestigationEvent:
+    """
+    Describe a finished tool call as a progress event.
+
+    The payload is the recorded ToolCall itself, with the tool under
+    "name", so progress events and the final tool_trace cannot disagree.
+    """
+    data = call.model_dump(mode="json", exclude={"tool"})
+    return InvestigationEvent(event, {"name": call.tool, **data})
+
+
 def _call_tool(
     tool_trace: list[ToolCall],
     tool: str,
     tool_input: dict[str, Any],
     function: Callable[[], Any],
-) -> Any:
+) -> Generator[InvestigationEvent, None, Any]:
     """
-    Run one tool and record the call in the trace.
+    Run one tool, record the call in the trace and report its progress.
+
+    Yields tool_start before the tool runs and tool_complete or
+    tool_error after it; the tool's result is the generator's return
+    value, so callers use ``result = yield from _call_tool(...)``.
 
     The tool is passed as a zero-argument callable so its failure
     happens inside this function and is recorded. A failed call is
@@ -50,18 +90,20 @@ def _call_tool(
     whether the investigation can continue. Outputs are stored in JSON
     form so the trace can be returned in the API response.
     """
+    yield InvestigationEvent(TOOL_START, {"name": tool, "input": tool_input})
+
     try:
         result = function()
     except Exception as exc:
-        tool_trace.append(
-            ToolCall(
-                tool=tool,
-                input=tool_input,
-                status=ToolCallStatus.ERROR,
-                error=str(exc),
-            )
+        call = ToolCall(
+            tool=tool,
+            input=tool_input,
+            status=ToolCallStatus.ERROR,
+            error=str(exc),
         )
-        raise
+        tool_trace.append(call)
+        yield _tool_event(TOOL_ERROR, call)
+        raise exc
 
     output = (
         result.model_dump(mode="json")
@@ -69,14 +111,14 @@ def _call_tool(
         else result
     )
 
-    tool_trace.append(
-        ToolCall(
-            tool=tool,
-            input=tool_input,
-            output=output,
-            status=ToolCallStatus.SUCCESS,
-        )
+    call = ToolCall(
+        tool=tool,
+        input=tool_input,
+        output=output,
+        status=ToolCallStatus.SUCCESS,
     )
+    tool_trace.append(call)
+    yield _tool_event(TOOL_COMPLETE, call)
 
     return result
 
@@ -114,7 +156,9 @@ def _summarize_weather(weather: dict[str, Any]) -> str:
     )
 
 
-def run_investigation(shipment_id: str) -> DisruptionBriefingResponse:
+def iter_investigation(
+    shipment_id: str,
+) -> Generator[InvestigationEvent, None, DisruptionBriefingResponse]:
     """
     Orchestrates the AI Agent investigation. Strictly enforces the Risk Gate:
     only shipments flagged as requiring investigation are processed.
@@ -123,12 +167,19 @@ def run_investigation(shipment_id: str) -> DisruptionBriefingResponse:
     destination weather, evidence, briefing. Every tool call is recorded in the response's tool_trace.
     The risk gate and shipment facts are required; other evidence that
     cannot be collected is reported in limitations.
+
+    This generator is the single implementation of the investigation.
+    It yields an event for each step as the step happens and returns
+    the finished briefing; the last event, done, carries that briefing
+    in JSON form. Each step runs only when the next event is requested,
+    so a caller that stops iterating stops the investigation. Fatal
+    failures are raised, exactly as run_investigation raises them.
     """
     tool_trace: list[ToolCall] = []
     limitations: list[str] = []
 
     # 1. ENFORCE THE GATE: Run prediction first
-    prediction = _call_tool(
+    prediction = yield from _call_tool(
         tool_trace,
         "get_delay_risk",
         {"shipment_id": shipment_id},
@@ -136,7 +187,7 @@ def run_investigation(shipment_id: str) -> DisruptionBriefingResponse:
     )
     if not prediction.requires_investigation:
         # LOW-risk shipments do not require AI investigation.
-        raise ValueError(f"Shipment {shipment_id} is LOW risk ({prediction.delay_probability}) and does not require AI investigation.")
+        raise InvestigationNotRequiredError(f"Shipment {shipment_id} is LOW risk ({prediction.delay_probability}) and does not require AI investigation.")
 
     # Use the normalized reference from the prediction (for example
     # "shp-1 " becomes "SHP-1") so every later tool call and the
@@ -145,7 +196,7 @@ def run_investigation(shipment_id: str) -> DisruptionBriefingResponse:
 
     # 2. Fetch the shipment facts. Required: the briefing service needs
     # the shipment record, so a failure here ends the investigation.
-    shipment = _call_tool(
+    shipment = yield from _call_tool(
         tool_trace,
         "get_shipment",
         {"shipment_id": shipment_reference},
@@ -157,7 +208,7 @@ def run_investigation(shipment_id: str) -> DisruptionBriefingResponse:
     # (and recorded in the trace) instead of failing the request.
     historical_delay_summary = None
     try:
-        context = _call_tool(
+        context = yield from _call_tool(
             tool_trace,
             "get_historical_delay_context",
             {"shipment_id": shipment_reference},
@@ -174,7 +225,7 @@ def run_investigation(shipment_id: str) -> DisruptionBriefingResponse:
     # service's own error is expected here; anything else is a defect.
     weather_summary = None
     try:
-        weather = _call_tool(
+        weather = yield from _call_tool(
             tool_trace,
             "get_destination_weather",
             {"shipment_id": shipment_reference},
@@ -204,9 +255,31 @@ def run_investigation(shipment_id: str) -> DisruptionBriefingResponse:
 
     # The trace and limitations are attached here so the briefing
     # service's interface stays unchanged.
-    return briefing.model_copy(
+    briefing = briefing.model_copy(
         update={
             "tool_trace": tool_trace,
             "limitations": limitations,
         }
     )
+
+    yield InvestigationEvent(
+        MESSAGE,
+        {"role": "agent", "content": briefing.summary},
+    )
+    yield InvestigationEvent(DONE, briefing.model_dump(mode="json"))
+
+    return briefing
+
+
+def run_investigation(shipment_id: str) -> DisruptionBriefingResponse:
+    """
+    Run the investigation to completion and return the briefing.
+
+    Drives iter_investigation without reporting its progress events.
+    """
+    events = iter_investigation(shipment_id)
+    while True:
+        try:
+            next(events)
+        except StopIteration as finished:
+            return finished.value

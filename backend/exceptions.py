@@ -20,3 +20,14 @@ class ThresholdConfigurationError(BackendServiceError):
 
 class WeatherServiceError(BackendServiceError):
     """Raised when weather evidence cannot be retrieved or understood."""
+
+
+class InvestigationNotRequiredError(ValueError):
+    """
+    Raised when the risk gate rejects a shipment that does not need
+    investigation.
+
+    A ValueError so existing callers that treat the rejection as a bad
+    request keep working; the dedicated type lets callers tell it apart
+    from other invalid input, such as a malformed shipment reference.
+    """
