@@ -11,22 +11,35 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 class Settings(BaseSettings):
     """Central configuration for the backend application."""
 
-    # Application
+    # ========================================================
+    # APPLICATION
+    # ========================================================
+
     app_name: str = "Supply-Chain Disruption Agent API"
     app_environment: str = "development"
     debug: bool = False
     mock_mode: bool = False
 
-    # Frontend
+    # ========================================================
+    # FRONTEND
+    # ========================================================
+
     frontend_url: str = "http://localhost:3000"
 
-    # Shipment Tool
+    # ========================================================
+    # SHIPMENT TOOL
+    # ========================================================
+
     shipment_data_path: Path = (
         PROJECT_ROOT
         / "data"
         / "processed"
         / "shipment_tool_data.csv"
     )
+
+    # ========================================================
+    # MACHINE LEARNING
+    # ========================================================
 
     model_data_path: Path = (
         PROJECT_ROOT
@@ -35,7 +48,6 @@ class Settings(BaseSettings):
         / "df_model.zip"
     )
 
-    # Machine-learning artifacts
     model_path: Path = (
         PROJECT_ROOT
         / "models"
@@ -48,37 +60,58 @@ class Settings(BaseSettings):
         / "preprocessor.joblib"
     )
 
-    # Provisional until validation-based threshold selection is finalized.
+    # Final operational thresholds.
     risk_threshold: float = 0.40
     high_risk_threshold: float = 0.70
 
+    # ========================================================
     # RAG
-    rag_persist_directory: Path = (
+    # ========================================================
+
+    vector_store_path: Path = (
         PROJECT_ROOT
         / "rag"
         / "vector_store"
     )
+
     rag_collection_name: str = "operational_sops"
 
-    # Azure OpenAI
+ 
+
+    # ========================================================
+    # AZURE OPENAI
+    # ========================================================
+
     azure_openai_endpoint: str | None = None
     azure_openai_api_key: str | None = None
-    azure_openai_deployment_name: str | None = None
-    azure_openai_api_version: str | None = None
+    azure_openai_api_version: str = "2024-02-01"
 
-    # Weather Tool
-    # Open-Meteo historical archive and geocoding. No API key is required.
+    azure_openai_chat_deployment: str | None = None
+    azure_openai_embedding_deployment: str | None = None
+
+    # Retained temporarily for backward compatibility.
+    azure_openai_deployment_name: str | None = None
+
+    # ========================================================
+    # WEATHER TOOL
+    # ========================================================
+
+    # Open-Meteo services do not require an API key.
     weather_api_base_url: str = (
         "https://archive-api.open-meteo.com/v1/archive"
     )
+
     weather_geocoding_url: str = (
         "https://geocoding-api.open-meteo.com/v1/search"
     )
+
     weather_timeout_seconds: float = 10.0
-    # Not used by Open-Meteo; kept for a provider that requires a key.
     weather_api_key: str | None = None
 
-    # Supplier Tool
+    # ========================================================
+    # SUPPLIER TOOL
+    # ========================================================
+
     supplier_data_path: Path = (
         PROJECT_ROOT
         / "data"
@@ -86,7 +119,10 @@ class Settings(BaseSettings):
         / "supplier_tool_data.csv"
     )
 
-    # Inventory Tool
+    # ========================================================
+    # INVENTORY TOOL
+    # ========================================================
+
     inventory_data_path: Path = (
         PROJECT_ROOT
         / "data"
@@ -94,7 +130,10 @@ class Settings(BaseSettings):
         / "inventory_tool_data.csv"
     )
 
-    # Read environment-variable overrides from the local .env file.
+    # ========================================================
+    # PYDANTIC SETTINGS
+    # ========================================================
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -103,7 +142,7 @@ class Settings(BaseSettings):
     )
 
 
-@lru_cache
+@lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """Create and cache one settings object per backend process."""
     return Settings()
