@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "supply-chain-intelligence"
+version = "0.1.0"
+description = "AI powered supply chain risk investigation system"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "python-dotenv",
+    "pandas",
+    "numpy",
+    "scikit-learn==1.6.1",
+    "joblib",
+    "requests",
+    "httpx",
+    "langchain-community",
+    "langchain-text-splitters",
+    "langchain-openai",
+    "langchain-chroma",
+    "pypdf",
+    "docx2txt",
+    "pydantic-settings",
+    "xgboost==3.1.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend", "rag"]
