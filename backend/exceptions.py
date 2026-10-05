@@ -31,3 +31,8 @@ class InvestigationNotRequiredError(ValueError):
     request keep working; the dedicated type lets callers tell it apart
     from other invalid input, such as a malformed shipment reference.
     """
+
+class AzureOpenAIServiceError(BackendServiceError):
+    """
+    Raised when Azure OpenAI briefing generation cannot be completed.
+    """

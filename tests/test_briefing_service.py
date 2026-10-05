@@ -3,16 +3,21 @@ from pathlib import Path
 from backend.models.schemas import (
     RiskLevel,
     ToolEvidence,
+    LLMBriefingContent,
 )
 from backend.services.briefing_service import (
     generate_rag_briefing,
 )
+from backend.exceptions import (
+    AzureOpenAIServiceError,
+)
+from backend.services import briefing_service
 
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def mock_rag_retrieval(
+def mock_external_briefing_dependencies(
     monkeypatch,
 ):
     retrieved_documents = [
@@ -26,9 +31,8 @@ def mock_rag_retrieval(
             ),
             "relevance_score": 0.91,
             "content": (
-                "Medium-risk shipments require "
-                "investigation and collection of "
-                "available operational evidence."
+                "Medium-risk shipments require investigation and "
+                "collection of available operational evidence."
             ),
             "metadata": {
                 "data_source": "SYNTHETIC_MVP",
@@ -44,9 +48,8 @@ def mock_rag_retrieval(
             ),
             "relevance_score": 0.84,
             "content": (
-                "Low-severity destination weather "
-                "does not independently justify "
-                "shipment rerouting."
+                "Low-severity destination weather does not "
+                "independently justify shipment rerouting."
             ),
             "metadata": {
                 "data_source": "SYNTHETIC_MVP",
@@ -60,6 +63,62 @@ def mock_rag_retrieval(
             "retrieve_operational_knowledge"
         ),
         lambda query, k=5: retrieved_documents,
+    )
+
+    def mock_generate_azure_briefing(
+        shipment_id,
+        risk_level,
+        delay_probability,
+        evidence,
+        retrieved_knowledge,
+    ):
+        summary_parts = [
+            (
+                f"Shipment {shipment_id} has a "
+                f"{risk_level.value} predicted delay risk of "
+                f"{delay_probability:.1%}."
+            )
+        ]
+
+        if evidence.historical_delay_summary:
+            summary_parts.append(
+                evidence.historical_delay_summary
+            )
+
+        if evidence.weather_summary:
+            summary_parts.append(
+                evidence.weather_summary
+            )
+
+        if evidence.supplier_status:
+            summary_parts.append(
+                evidence.supplier_status
+            )
+
+        if evidence.inventory_coverage_days is not None:
+            summary_parts.append(
+                "Available inventory coverage is "
+                f"{evidence.inventory_coverage_days} days."
+            )
+        else:
+            summary_parts.append(
+                "Inventory coverage has not yet been assessed."
+            )
+
+        return LLMBriefingContent(
+            summary=" ".join(summary_parts),
+            risk_factors=[],
+            recommended_actions=[
+                "Continue human operational review.",
+            ],
+        )
+
+    monkeypatch.setattr(
+        (
+            "backend.services.briefing_service."
+            "generate_azure_briefing"
+        ),
+        mock_generate_azure_briefing,
     )
 
 
@@ -234,5 +293,63 @@ def test_low_severity_weather_does_not_trigger_rerouting(
             "immediately"
             in action.lower()
         )
+        for action in briefing.recommended_actions
+    )
+
+
+
+
+def test_azure_failure_uses_deterministic_fallback(
+    shipment_data,
+    monkeypatch,
+):
+    def broken_azure_generation(**kwargs):
+        raise AzureOpenAIServiceError(
+            "simulated Azure outage"
+        )
+
+    monkeypatch.setattr(
+        briefing_service,
+        "generate_azure_briefing",
+        broken_azure_generation,
+    )
+
+    evidence = ToolEvidence(
+        historical_delay_summary=(
+            "Historical product delay rate is elevated."
+        ),
+        weather_summary=(
+            "Destination weather has low severity."
+        ),
+        supplier_status=(
+            "Synthetic supplier evidence requires "
+            "human validation."
+        ),
+        inventory_coverage_days=None,
+    )
+
+    briefing = make_briefing(
+        evidence
+    )
+
+    assert briefing.summary
+
+    assert (
+        "Historical product delay rate is elevated."
+        in briefing.summary
+    )
+
+    assert (
+        "Destination weather has low severity."
+        in briefing.summary
+    )
+
+    assert briefing.recommended_actions
+
+    assert any(
+        "human"
+        in action.lower()
+        or "monitor"
+        in action.lower()
         for action in briefing.recommended_actions
     )

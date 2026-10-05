@@ -1,15 +1,26 @@
+import logging
 from typing import Any
 
+from backend.exceptions import AzureOpenAIServiceError
 from backend.models.schemas import (
     DisruptionBriefingResponse,
+    LLMBriefingContent,
     RiskLevel,
     ToolEvidence,
 )
-from backend.services.shipment_service import get_shipment_by_id
+from backend.services.azure_openai_service import (
+    generate_azure_briefing,
+)
+from backend.services.shipment_service import (
+    get_shipment_by_id,
+)
 from rag.retrieval import (
     RAGRetrievalError,
     retrieve_operational_knowledge,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 def build_rag_query(
@@ -79,7 +90,7 @@ def build_rag_query(
 
 def extract_rag_citations(
     retrieved_knowledge: list[dict[str, Any]],
-) -> list: 
+) -> list:
     """
     Extract unique source filenames in retrieval-ranked order.
     """
@@ -107,10 +118,8 @@ def build_guidance_summary(
     retrieved_knowledge: list[dict[str, Any]],
 ) -> str:
     """
-    Build a short deterministic summary using at most one excerpt
-    from each retrieved source.
-
-    Azure OpenAI synthesis can replace this implementation later.
+    Build a short deterministic guidance summary using at most one
+    excerpt from each retrieved source.
     """
     if not retrieved_knowledge:
         return (
@@ -170,14 +179,16 @@ def build_guidance_summary(
     )
 
 
-def build_recommended_actions(
+def build_deterministic_actions(
     risk_level: RiskLevel,
     evidence: ToolEvidence,
     retrieved_knowledge: list[dict[str, Any]],
 ) -> list:
     """
-    Build conservative recommendations from collected evidence and
-    retrieved operational knowledge.
+    Build conservative deterministic recommendations.
+
+    This function is used when Azure OpenAI cannot generate a valid
+    briefing.
     """
     actions: list[str] = []
 
@@ -256,8 +267,9 @@ def build_recommended_actions(
 
     if evidence.supplier_status:
         actions.append(
-            "Use the collected supplier evidence when evaluating "
-            "alternative sourcing options."
+            "Use the collected synthetic supplier evidence when "
+            "evaluating alternative sourcing options, subject to "
+            "human validation."
         )
     else:
         actions.append(
@@ -291,6 +303,108 @@ def build_recommended_actions(
     return actions
 
 
+def build_deterministic_briefing(
+    shipment_id: str,
+    risk_level: RiskLevel,
+    delay_probability: float,
+    evidence: ToolEvidence,
+    retrieved_knowledge: list[dict[str, Any]],
+) -> LLMBriefingContent:
+    """
+    Build a grounded briefing without Azure OpenAI.
+
+    This is the safe fallback when Azure is unavailable or returns an
+    invalid response.
+    """
+    shipment = get_shipment_by_id(
+        shipment_id
+    )
+
+    destination = ", ".join(
+        part
+        for part in [
+            shipment.destination_city,
+            shipment.destination_state,
+            shipment.destination_country,
+        ]
+        if part
+    )
+
+    summary_parts = [
+        (
+            f"Shipment {shipment_id}, containing "
+            f"{shipment.quantity} x {shipment.product_name}, has a "
+            f"{risk_level.value} predicted delay risk of "
+            f"{delay_probability:.1%}."
+        ),
+        (
+            f"The shipment is scheduled for {destination} using "
+            f"{shipment.shipping_mode}."
+        ),
+    ]
+
+    risk_factors: list[str] = []
+
+    if evidence.historical_delay_summary:
+        summary_parts.append(
+            evidence.historical_delay_summary
+        )
+
+        risk_factors.append(
+            evidence.historical_delay_summary
+        )
+
+    if evidence.weather_summary:
+        summary_parts.append(
+            evidence.weather_summary
+        )
+
+        risk_factors.append(
+            evidence.weather_summary
+        )
+
+    if evidence.supplier_status:
+        summary_parts.append(
+            f"Supplier evidence: {evidence.supplier_status}"
+        )
+
+        risk_factors.append(
+            evidence.supplier_status
+        )
+    else:
+        summary_parts.append(
+            "Supplier availability has not yet been assessed."
+        )
+
+    if evidence.inventory_coverage_days is not None:
+        summary_parts.append(
+            "Available inventory coverage is "
+            f"{evidence.inventory_coverage_days} days."
+        )
+    else:
+        summary_parts.append(
+            "Inventory coverage has not yet been assessed."
+        )
+
+    summary_parts.append(
+        build_guidance_summary(
+            retrieved_knowledge
+        )
+    )
+
+    return LLMBriefingContent(
+        summary=" ".join(summary_parts),
+        risk_factors=risk_factors,
+        recommended_actions=(
+            build_deterministic_actions(
+                risk_level=risk_level,
+                evidence=evidence,
+                retrieved_knowledge=retrieved_knowledge,
+            )
+        ),
+    )
+
+
 def generate_rag_briefing(
     shipment_id: str,
     risk_level: RiskLevel,
@@ -298,13 +412,14 @@ def generate_rag_briefing(
     evidence: ToolEvidence,
 ) -> DisruptionBriefingResponse:
     """
-    Retrieve operational knowledge from Chroma and create an
-    evidence-based disruption briefing.
+    Retrieve operational knowledge and generate a grounded briefing.
 
-    The RAG citations are real source filenames retrieved from the
-    synthetic PDF knowledge base.
+    Azure OpenAI is the primary synthesis method. A deterministic,
+    evidence-based implementation is retained as a safe fallback.
     """
-    shipment = get_shipment_by_id(shipment_id)
+    get_shipment_by_id(
+        shipment_id
+    )
 
     rag_query = build_rag_query(
         shipment_id=shipment_id,
@@ -341,69 +456,35 @@ def generate_rag_briefing(
             "citations were available."
         )
 
-    destination = ", ".join(
-        part
-        for part in [
-            shipment.destination_city,
-            shipment.destination_state,
-            shipment.destination_country,
-        ]
-        if part
-    )
-
-    summary_parts = [
-        (
-            f"Shipment {shipment_id}, containing "
-            f"{shipment.quantity} x {shipment.product_name}, has a "
-            f"{risk_level.value} predicted delay risk of "
-            f"{delay_probability:.1%}."
-        ),
-        (
-            f"The shipment is scheduled for {destination} using "
-            f"{shipment.shipping_mode}."
-        ),
-    ]
-
-    if evidence.historical_delay_summary:
-        summary_parts.append(
-            evidence.historical_delay_summary
+    try:
+        generated_content = generate_azure_briefing(
+            shipment_id=shipment_id,
+            risk_level=risk_level,
+            delay_probability=delay_probability,
+            evidence=evidence,
+            retrieved_knowledge=retrieved_knowledge,
         )
 
-    if evidence.weather_summary:
-        summary_parts.append(
-            evidence.weather_summary
+        logger.info(
+            "Azure OpenAI generated the briefing for shipment %s.",
+            shipment_id,
         )
 
-    if evidence.supplier_status:
-        summary_parts.append(
-            f"Supplier evidence: {evidence.supplier_status}"
-        )
-    else:
-        summary_parts.append(
-            "Supplier availability has not yet been assessed."
-        )
-
-    if evidence.inventory_coverage_days is not None:
-        summary_parts.append(
-            "Available inventory coverage is "
-            f"{evidence.inventory_coverage_days} days."
-        )
-    else:
-        summary_parts.append(
-            "Inventory coverage has not yet been assessed."
+    except AzureOpenAIServiceError as exc:
+        logger.warning(
+            "Azure OpenAI briefing generation failed for shipment "
+            "%s. Using deterministic fallback. Error: %s",
+            shipment_id,
+            exc,
         )
 
-    summary_parts.append(
-        build_guidance_summary(
-            retrieved_knowledge
+        generated_content = build_deterministic_briefing(
+            shipment_id=shipment_id,
+            risk_level=risk_level,
+            delay_probability=delay_probability,
+            evidence=evidence,
+            retrieved_knowledge=retrieved_knowledge,
         )
-    )
-
-    recommended_actions = build_recommended_actions(
-        risk_level=risk_level,
-        evidence=evidence,
-        retrieved_knowledge=retrieved_knowledge,
-    )
 
     return DisruptionBriefingResponse(
         shipment_id=shipment_id,
@@ -411,6 +492,8 @@ def generate_rag_briefing(
         delay_probability=delay_probability,
         evidence=evidence,
         rag_policy_citations=rag_policy_citations,
-        summary=" ".join(summary_parts),
-        recommended_actions=recommended_actions,
+        summary=generated_content.summary,
+        recommended_actions=(
+            generated_content.recommended_actions
+        ),
     )
