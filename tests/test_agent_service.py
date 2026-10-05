@@ -17,6 +17,9 @@ from backend.services.agent_service import (
 )
 from backend.services.shipment_service import ShipmentNotFoundError
 
+pytestmark = pytest.mark.usefixtures(
+    "mock_azure_briefing"
+)
 
 EXPECTED_TOOLS = [
     "get_delay_risk",
@@ -25,6 +28,28 @@ EXPECTED_TOOLS = [
     "get_destination_weather",
     "find_alternative_supplier",
 ]
+
+EXPECTED_TOOL_INPUTS = {
+    "get_delay_risk": {
+        "shipment_id": "SHP-153440",
+    },
+    "get_shipment": {
+        "shipment_id": "SHP-153440",
+    },
+    "get_historical_delay_context": {
+        "shipment_id": "SHP-153440",
+    },
+    "get_destination_weather": {
+        "shipment_id": "SHP-153440",
+    },
+    "find_alternative_supplier": {
+        "category": "Cleats",
+        "destination_country": "Brasil",
+        "required_quantity": 2,
+        "limit": 3,
+    },
+}
+
 
 STANDING_LIMITATIONS = [
     (
@@ -103,9 +128,11 @@ def test_tool_trace_records_each_call_in_order(high_risk):
 
     assert [call.tool for call in trace] == EXPECTED_TOOLS
     assert all(call.status == ToolCallStatus.SUCCESS for call in trace)
-    assert all(
-        call.input == {"shipment_id": "SHP-153440"} for call in trace
-    )
+    for call in trace:
+        assert (
+            call.input
+            == EXPECTED_TOOL_INPUTS[call.tool]
+        )
     assert trace[0].output == high_risk.model_dump(mode="json")
     assert trace[1].output["shipment_reference"] == "SHP-153440"
     assert trace[2].output["highest_delay_rate_factor"] == "product"
@@ -156,9 +183,15 @@ def test_weather_step_populates_weather_evidence(
         == expected_weather_summary
     )
 
-    assert (
-        expected_weather_summary
-        in briefing.summary
+    summary_text = briefing.summary.lower()
+
+    assert "weather" in summary_text
+    assert "low severity" in summary_text
+
+    assert not any(
+        "reroute immediately"
+        in action.lower()
+        for action in briefing.recommended_actions
     )
 
     assert any(
@@ -196,11 +229,15 @@ def test_weather_failure_becomes_limitation(high_risk, monkeypatch):
 
 
     assert briefing.evidence.weather_summary is None
-    assert briefing.limitations == [
+    assert (
         "Weather evidence was not collected: "
-        "Open-Meteo did not respond within 10 seconds.",
-        *STANDING_LIMITATIONS,
-    ]
+        "Open-Meteo did not respond within 10 seconds."
+        in briefing.limitations
+    )
+
+    assert_standard_limitations(
+        briefing.limitations
+    )
 
 
 def test_risk_gate_rejects_low_risk_shipment(low_risk, monkeypatch):
@@ -272,7 +309,9 @@ def test_investigate_endpoint_returns_briefing_schema(client, high_risk):
     assert body["risk_level"] == "HIGH"
     assert [call["tool"] for call in body["tool_trace"]] == EXPECTED_TOOLS
     assert body["tool_trace"][0]["status"] == "success"
-    assert body["limitations"] == STANDING_LIMITATIONS
+    assert_standard_limitations(
+        body["limitations"]
+    )
 
 
 def test_investigate_endpoint_rejects_low_risk(client, low_risk):
@@ -326,4 +365,28 @@ def test_investigation_collects_supplier_evidence(
     assert (
         supplier_calls[0].status
         == ToolCallStatus.SUCCESS
+    )
+
+def assert_standard_limitations(
+    limitations: list[str],
+) -> None:
+    for limitation in STANDING_LIMITATIONS:
+        assert limitation in limitations
+
+    assert any(
+        "Supplier records are synthetic demonstration data"
+        in limitation
+        for limitation in limitations
+    )
+
+    assert any(
+        "cannot be validated against supplier capacity"
+        in limitation
+        for limitation in limitations
+    )
+
+    assert any(
+        "Human approval is required before changing suppliers"
+        in limitation
+        for limitation in limitations
     )

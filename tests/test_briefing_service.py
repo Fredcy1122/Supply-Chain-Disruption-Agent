@@ -1,25 +1,31 @@
 from pathlib import Path
 
-from backend.models.schemas import (
-    RiskLevel,
-    ToolEvidence,
-    LLMBriefingContent,
-)
-from backend.services.briefing_service import (
-    generate_rag_briefing,
-)
+import pytest
+
 from backend.exceptions import (
     AzureOpenAIServiceError,
 )
+from backend.models.schemas import (
+    LLMBriefingContent,
+    RiskLevel,
+    ToolEvidence,
+)
 from backend.services import briefing_service
-
-import pytest
+from backend.services.briefing_service import (
+    generate_rag_briefing,
+)
 
 
 @pytest.fixture(autouse=True)
 def mock_external_briefing_dependencies(
     monkeypatch,
 ):
+    """
+    Mock RAG retrieval and Azure OpenAI synthesis.
+
+    These tests verify briefing-service behavior without making real
+    Azure requests or depending on Chroma retrieval ranking.
+    """
     retrieved_documents = [
         {
             "rank": 1,
@@ -58,10 +64,8 @@ def mock_external_briefing_dependencies(
     ]
 
     monkeypatch.setattr(
-        (
-            "backend.services.briefing_service."
-            "retrieve_operational_knowledge"
-        ),
+        briefing_service,
+        "retrieve_operational_knowledge",
         lambda query, k=5: retrieved_documents,
     )
 
@@ -72,6 +76,9 @@ def mock_external_briefing_dependencies(
         evidence,
         retrieved_knowledge,
     ):
+        """
+        Return deterministic Azure-style structured content.
+        """
         summary_parts = [
             (
                 f"Shipment {shipment_id} has a "
@@ -80,8 +87,19 @@ def mock_external_briefing_dependencies(
             )
         ]
 
+        risk_factors = []
+
+        if evidence.shipment_summary:
+            summary_parts.append(
+                evidence.shipment_summary
+            )
+
         if evidence.historical_delay_summary:
             summary_parts.append(
+                evidence.historical_delay_summary
+            )
+
+            risk_factors.append(
                 evidence.historical_delay_summary
             )
 
@@ -90,9 +108,21 @@ def mock_external_briefing_dependencies(
                 evidence.weather_summary
             )
 
+            risk_factors.append(
+                evidence.weather_summary
+            )
+
         if evidence.supplier_status:
             summary_parts.append(
                 evidence.supplier_status
+            )
+
+            risk_factors.append(
+                evidence.supplier_status
+            )
+        else:
+            summary_parts.append(
+                "Supplier availability has not yet been assessed."
             )
 
         if evidence.inventory_coverage_days is not None:
@@ -105,19 +135,109 @@ def mock_external_briefing_dependencies(
                 "Inventory coverage has not yet been assessed."
             )
 
+        recommended_actions = [
+            "Continue human operational review.",
+        ]
+
+        if evidence.historical_delay_summary:
+            recommended_actions.append(
+                "Review the elevated historical delay factors."
+            )
+
+        if evidence.weather_summary:
+            weather_text = (
+                evidence.weather_summary.lower()
+            )
+
+            severe_weather_terms = (
+                "high severity",
+                "severe weather",
+                "thunderstorm",
+                "heavy rain",
+                "heavy snow",
+                "extreme weather",
+                "flood",
+                "hurricane",
+                "tornado",
+            )
+
+            low_weather_terms = (
+                "low severity",
+                "light drizzle",
+                "clear sky",
+                "mainly clear",
+                "partly cloudy",
+            )
+
+            severe_weather = any(
+                term in weather_text
+                for term in severe_weather_terms
+            )
+
+            low_weather = any(
+                term in weather_text
+                for term in low_weather_terms
+            )
+
+            if severe_weather and not low_weather:
+                recommended_actions.append(
+                    "Evaluate transport alternatives because the "
+                    "collected weather evidence indicates potentially "
+                    "severe conditions."
+                )
+
+            elif low_weather:
+                recommended_actions.append(
+                    "Continue monitoring destination weather, but do "
+                    "not reroute solely on the current low-severity "
+                    "weather evidence."
+                )
+
+            else:
+                recommended_actions.append(
+                    "Continue monitoring destination weather before "
+                    "making any rerouting decision."
+                )
+
+        if evidence.supplier_status:
+            recommended_actions.append(
+                "Validate the synthetic supplier geographically, "
+                "commercially, and operationally before considering "
+                "a supplier change."
+            )
+        else:
+            recommended_actions.append(
+                "Obtain supplier availability and performance "
+                "evidence before recommending an alternative."
+            )
+
+        if evidence.inventory_coverage_days is None:
+            recommended_actions.append(
+                "Obtain inventory coverage before determining "
+                "stockout exposure."
+            )
+
+        elif evidence.inventory_coverage_days <= 3:
+            recommended_actions.append(
+                "Escalate potential stockout exposure because "
+                "inventory coverage is three days or less."
+            )
+
+        else:
+            recommended_actions.append(
+                "Compare the expected disruption duration with "
+                "available inventory coverage."
+            )
+
         return LLMBriefingContent(
             summary=" ".join(summary_parts),
-            risk_factors=[],
-            recommended_actions=[
-                "Continue human operational review.",
-            ],
+            risk_factors=risk_factors,
+            recommended_actions=recommended_actions,
         )
 
     monkeypatch.setattr(
-        (
-            "backend.services.briefing_service."
-            "generate_azure_briefing"
-        ),
+        briefing_service,
+        "generate_azure_briefing",
         mock_generate_azure_briefing,
     )
 
@@ -126,6 +246,9 @@ def make_briefing(
     evidence: ToolEvidence,
     probability: float = 0.55,
 ):
+    """
+    Generate a briefing using the mocked external dependencies.
+    """
     return generate_rag_briefing(
         shipment_id="SHP-153440",
         risk_level=RiskLevel.MEDIUM,
@@ -297,6 +420,55 @@ def test_low_severity_weather_does_not_trigger_rerouting(
     )
 
 
+def test_severe_weather_supports_transport_review(
+    shipment_data,
+):
+    evidence = ToolEvidence(
+        weather_summary=(
+            "Observed destination weather showed "
+            "heavy rain with high severity."
+        ),
+    )
+
+    briefing = make_briefing(
+        evidence
+    )
+
+    assert any(
+        (
+            "evaluate transport alternatives"
+            in action.lower()
+        )
+        for action in briefing.recommended_actions
+    )
+
+
+def test_supplier_evidence_requires_validation(
+    shipment_data,
+):
+    evidence = ToolEvidence(
+        supplier_status=(
+            "Synthetic supplier SUP003 has MEDIUM risk, "
+            "but geographic suitability is unverified."
+        ),
+    )
+
+    briefing = make_briefing(
+        evidence
+    )
+
+    assert (
+        evidence.supplier_status
+        in briefing.summary
+    )
+
+    assert any(
+        (
+            "validate the synthetic supplier"
+            in action.lower()
+        )
+        for action in briefing.recommended_actions
+    )
 
 
 def test_azure_failure_uses_deterministic_fallback(
@@ -347,9 +519,11 @@ def test_azure_failure_uses_deterministic_fallback(
     assert briefing.recommended_actions
 
     assert any(
-        "human"
-        in action.lower()
-        or "monitor"
-        in action.lower()
+        (
+            "human"
+            in action.lower()
+            or "monitor"
+            in action.lower()
+        )
         for action in briefing.recommended_actions
     )

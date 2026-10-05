@@ -296,7 +296,17 @@ def generate_azure_briefing(
 
 def clear_azure_openai_client_cache() -> None:
     """
-    Clear the cached Azure OpenAI client for tests or configuration
-    replacement.
+    Clear the cached Azure OpenAI client when the active client
+    factory supports caching.
+
+    During tests, get_azure_openai_client may be temporarily replaced
+    with a plain mock function that does not expose cache_clear.
     """
-    get_azure_openai_client.cache_clear()
+    cache_clear = getattr(
+        get_azure_openai_client,
+        "cache_clear",
+        None,
+    )
+
+    if callable(cache_clear):
+        cache_clear()

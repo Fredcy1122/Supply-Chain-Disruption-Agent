@@ -20,6 +20,9 @@ from backend.services.shipment_service import (
     ShipmentNotFoundError,
 )
 
+pytestmark = pytest.mark.usefixtures(
+    "mock_azure_briefing"
+)
 
 STREAM_URL = "/api/agent/investigate/SHP-153440/stream"
 
@@ -30,6 +33,28 @@ EXPECTED_TOOLS = [
     "get_destination_weather",
     "find_alternative_supplier",
 ]
+
+EXPECTED_TOOL_INPUTS = {
+    "get_delay_risk": {
+        "shipment_id": "SHP-153440",
+    },
+    "get_shipment": {
+        "shipment_id": "SHP-153440",
+    },
+    "get_historical_delay_context": {
+        "shipment_id": "SHP-153440",
+    },
+    "get_destination_weather": {
+        "shipment_id": "SHP-153440",
+    },
+    "find_alternative_supplier": {
+        "category": "Cleats",
+        "destination_country": "Brasil",
+        "required_quantity": 2,
+        "limit": 3,
+    },
+}
+
 
 STANDING_LIMITATIONS = [
     (
@@ -143,10 +168,21 @@ def test_tool_events_carry_the_recorded_tool_calls(client, high_risk):
     completed = [data for name, data in events if name == "tool_complete"]
     trace = events[-1][1]["tool_trace"]
 
-    assert all(
-        start == {"name": tool, "input": {"shipment_id": "SHP-153440"}}
-        for start, tool in zip(starts, EXPECTED_TOOLS)
+    assert len(starts) == len(
+        EXPECTED_TOOLS
     )
+
+    for start, tool in zip(
+        starts,
+        EXPECTED_TOOLS,
+        strict=True,
+    ):
+        assert start == {
+            "name": tool,
+            "input": EXPECTED_TOOL_INPUTS[
+                tool
+            ],
+        }
     # A tool_complete event is the trace entry with the tool under "name".
     assert [
         {"tool": data["name"], **{k: v for k, v in data.items() if k != "name"}}
@@ -245,11 +281,15 @@ def test_weather_failure_emits_tool_error_and_continues(
     )
 
     assert supplier_call["status"] == "success"
-    assert done["limitations"] == [
+    assert (
         "Weather evidence was not collected: "
-        "Open-Meteo did not respond within 10 seconds.",
-        *STANDING_LIMITATIONS,
-    ]
+        "Open-Meteo did not respond within 10 seconds."
+        in done["limitations"]
+    )
+
+    assert_standard_limitations(
+        done["limitations"]
+    )
 
 
 def test_historical_context_failure_emits_tool_error_and_continues(
@@ -512,3 +552,28 @@ def test_application_registers_stream_route():
 
     assert "get" in paths["/api/agent/investigate/{shipment_id}/stream"]
     assert "post" in paths["/api/agent/investigate/{shipment_id}"]
+
+
+def assert_standard_limitations(
+    limitations: list[str],
+) -> None:
+    for limitation in STANDING_LIMITATIONS:
+        assert limitation in limitations
+
+    assert any(
+        "Supplier records are synthetic demonstration data"
+        in limitation
+        for limitation in limitations
+    )
+
+    assert any(
+        "cannot be validated against supplier capacity"
+        in limitation
+        for limitation in limitations
+    )
+
+    assert any(
+        "Human approval is required before changing suppliers"
+        in limitation
+        for limitation in limitations
+    )
