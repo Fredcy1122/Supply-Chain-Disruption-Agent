@@ -4,10 +4,7 @@
 const NA = "Not available";
 const FAILED = "Investigation failed";
 
-// Kept temporarily for compatibility with Actions.jsx.
-// The completed backend no longer uses pending placeholder actions.
-export const RECOMMENDATIONS_PENDING =
-  "No grounded recommendations are currently available.";
+
 
 
 export class ApiError extends Error {
