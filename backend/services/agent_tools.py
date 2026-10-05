@@ -9,7 +9,7 @@ recalculated here.
 from datetime import timedelta
 from typing import Any
 
-from backend.models.schemas import PredictionResponse, ShipmentResponse
+from backend.models.schemas import PredictionResponse, ShipmentResponse, SupplierRecommendation
 from backend.services.prediction_service import predict_delay_risk
 from backend.services.shipment_service import get_shipment_by_id
 from backend.services.weather_service import (
@@ -19,6 +19,10 @@ from backend.services.weather_service import (
     get_country_code,
     get_daily_weather,
 )
+from backend.services.supplier_service import (
+find_alternative_supplier,
+)
+
 
 
 # ============================================================
@@ -152,3 +156,23 @@ def get_destination_weather(
         "severity": classify_weather_severity(worst_code),
         "source": "Open-Meteo historical archive",
     }
+
+def get_alternative_suppliers(
+    shipment: ShipmentResponse,
+    limit: int = 3,
+) -> SupplierRecommendation:
+    """
+    Find synthetic alternative suppliers for a shipment.
+
+    The result is decision-support evidence only. Supplier records
+    are synthetic and must not be interpreted as real contracted
+    suppliers.
+    """
+    return find_alternative_supplier(
+        category=shipment.category,
+        destination_country=(
+            shipment.destination_country
+        ),
+        required_quantity=shipment.quantity,
+        limit=limit,
+    )

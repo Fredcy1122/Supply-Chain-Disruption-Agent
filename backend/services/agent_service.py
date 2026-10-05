@@ -19,9 +19,14 @@ from backend.services.agent_tools import (
     get_destination_weather,
     get_historical_delay_context,
     get_shipment,
+    get_alternative_suppliers,
 )
 from backend.services.briefing_service import (
     generate_rag_briefing,
+)
+from backend.services.supplier_service import (
+    SupplierNotFoundError,
+    SupplierServiceError,
 )
 
 
@@ -34,16 +39,13 @@ WEATHER_SCOPE_LIMITATION = (
 
 UNCOLLECTED_EVIDENCE_LIMITATIONS = [
     (
-        "Supplier status was not collected because no supplier "
-        "data source is currently connected."
-    ),
-    (
         "Inventory coverage was not collected because no inventory "
         "data source is currently connected."
     ),
     (
-        "Retrieved operational procedures are synthetic "
-        "demonstration documents and are not real company policies."
+        "Supplier records and retrieved operational procedures are "
+        "synthetic demonstration data and are not real company "
+        "records or policies."
     ),
 ]
 
@@ -203,6 +205,39 @@ def _summarize_weather(
         f"({weather['severity']} severity)."
     )
 
+def _summarize_supplier_recommendation(
+    recommendation,
+) -> str:
+    """
+    Summarize the synthetic Supplier Tool result for the briefing.
+    """
+    supplier = (
+        recommendation.recommended_supplier
+    )
+
+    if supplier is None:
+        return (
+            "No LOW- or MEDIUM-risk synthetic supplier could be "
+            "recommended. Available candidates require additional "
+            "human review."
+        )
+
+    return (
+        "Synthetic alternative supplier candidate: "
+        f"{supplier.supplier_id} "
+        f"({supplier.supplier_name}), "
+        f"located in {supplier.supplier_country}; "
+        f"category {supplier.product_category}; "
+        f"average lead time "
+        f"{supplier.average_lead_time_days:.1f} days; "
+        f"on-time delivery rate "
+        f"{supplier.on_time_delivery_rate:.1%}; "
+        f"supplier risk "
+        f"{supplier.supplier_risk_level.value} "
+        f"({supplier.supplier_risk_score:.2f}/100). "
+        "Quantity capacity and contractual availability are not "
+        "verified."
+    )
 
 def iter_investigation(
     shipment_id: str,
@@ -311,7 +346,47 @@ def iter_investigation(
             "Weather evidence was not collected: "
             f"{exc}"
         )
+    supplier_status = None
 
+    try:
+        supplier_recommendation = yield from _call_tool(
+            tool_trace=tool_trace,
+            tool="find_alternative_supplier",
+            tool_input={
+                "category": shipment.category,
+                "destination_country": (
+                    shipment.destination_country
+                ),
+                "required_quantity": shipment.quantity,
+                "limit": 3,
+            },
+            function=lambda: get_alternative_suppliers(
+                shipment=shipment,
+                limit=3,
+            ),
+        )
+
+        supplier_status = (
+            _summarize_supplier_recommendation(
+                supplier_recommendation
+            )
+        )
+
+        limitations.append(
+            supplier_recommendation.limitation
+        )
+
+    except SupplierNotFoundError as exc:
+        limitations.append(
+            "No category-compatible synthetic supplier was found: "
+            f"{exc}"
+        )
+
+    except SupplierServiceError as exc:
+        limitations.append(
+            "Supplier evidence was not collected because the "
+            f"supplier service failed: {exc}"
+        )
     evidence = ToolEvidence(
         shipment_summary=_summarize_shipment(
             shipment
@@ -320,7 +395,7 @@ def iter_investigation(
             historical_delay_summary
         ),
         weather_summary=weather_summary,
-        supplier_status=None,
+        supplier_status=supplier_status,
         inventory_coverage_days=None,
     )
 

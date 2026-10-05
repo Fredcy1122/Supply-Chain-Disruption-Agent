@@ -16,6 +16,9 @@ from backend.services.shipment_service import (
     InvalidShipmentReferenceError,
     ShipmentNotFoundError,
 )
+from backend.services.agent_tools import (
+    get_alternative_suppliers,
+)
 
 
 def test_get_shipment_returns_shipment_record(shipment_data):
@@ -166,3 +169,25 @@ def test_get_destination_weather_rejects_unmapped_country(shipment):
 
     with pytest.raises(WeatherServiceError, match="Atlantis"):
         get_destination_weather(shipment)
+
+def test_get_alternative_suppliers_returns_synthetic_candidates(
+    shipment,
+):
+    result = get_alternative_suppliers(
+        shipment=shipment,
+        limit=3,
+    )
+
+    assert result.alternatives
+    assert result.data_source == "SYNTHETIC_MVP"
+
+    assert (
+        result.quantity_capacity_verified
+        is False
+    )
+
+    for supplier in result.alternatives:
+        assert (
+            supplier.data_source
+            == "SYNTHETIC_MVP"
+        )

@@ -23,11 +23,25 @@ EXPECTED_TOOLS = [
     "get_shipment",
     "get_historical_delay_context",
     "get_destination_weather",
+    "find_alternative_supplier",
 ]
 
 STANDING_LIMITATIONS = [
-    WEATHER_SCOPE_LIMITATION,
-    *UNCOLLECTED_EVIDENCE_LIMITATIONS,
+    (
+        "Weather describes the geocoded destination city over an "
+        "approximate window from the order date through the scheduled "
+        "shipping period. It does not represent the full shipment "
+        "route."
+    ),
+    (
+        "Inventory coverage was not collected because no inventory "
+        "data source is currently connected."
+    ),
+    (
+        "Supplier records and retrieved operational procedures are "
+        "synthetic demonstration data and are not real company "
+        "records or policies."
+    ),
 ]
 
 
@@ -61,10 +75,26 @@ def test_successful_investigation_returns_briefing(high_risk):
     )
 
 
-def test_investigation_does_not_invent_uncollected_evidence(high_risk):
-    evidence = run_investigation("SHP-153440").evidence
+def test_investigation_does_not_invent_uncollected_evidence(
+    high_risk,
+):
+    evidence = run_investigation(
+        "SHP-153440"
+    ).evidence
 
-    assert evidence.supplier_status is None
+    assert evidence.supplier_status is not None
+
+    assert (
+        "Synthetic alternative supplier candidate"
+        in evidence.supplier_status
+    )
+
+    assert (
+        "Quantity capacity and contractual availability "
+        "are not verified."
+        in evidence.supplier_status
+    )
+
     assert evidence.inventory_coverage_days is None
 
 
@@ -82,10 +112,27 @@ def test_tool_trace_records_each_call_in_order(high_risk):
     assert trace[3].output["source"] == "Open-Meteo historical archive"
 
 
-def test_limitations_list_uncollected_evidence(high_risk):
-    briefing = run_investigation("SHP-153440")
+def test_limitations_list_uncollected_evidence(
+    high_risk,
+):
+    briefing = run_investigation(
+        "SHP-153440"
+    )
 
-    assert briefing.limitations == STANDING_LIMITATIONS
+    for limitation in STANDING_LIMITATIONS:
+        assert limitation in briefing.limitations
+
+    assert any(
+        "Supplier records are synthetic demonstration data"
+        in limitation
+        for limitation in briefing.limitations
+    )
+
+    assert any(
+        "cannot be validated against supplier capacity"
+        in limitation
+        for limitation in briefing.limitations
+    )
 
 
 def test_weather_step_populates_weather_evidence(
@@ -131,10 +178,22 @@ def test_weather_failure_becomes_limitation(high_risk, monkeypatch):
 
     briefing = run_investigation("SHP-153440")
 
-    failed_call = briefing.tool_trace[-1]
-    assert failed_call.tool == "get_destination_weather"
+    failed_call = next(
+    call
+    for call in briefing.tool_trace
+    if call.tool == "get_destination_weather"
+    )
+
     assert failed_call.status == ToolCallStatus.ERROR
-    assert failed_call.error == "Open-Meteo did not respond within 10 seconds."
+
+    supplier_call = next(
+    call
+    for call in briefing.tool_trace
+    if call.tool == "find_alternative_supplier"
+    )
+
+    assert supplier_call.status == ToolCallStatus.SUCCESS
+
 
     assert briefing.evidence.weather_summary is None
     assert briefing.limitations == [
@@ -237,3 +296,34 @@ def test_investigate_endpoint_unknown_shipment_returns_404(
 
     assert response.status_code == 404
     assert "was not found" in response.json()["detail"]
+
+def test_investigation_collects_supplier_evidence(
+    high_risk,
+):
+    briefing = run_investigation(
+        "SHP-153440"
+    )
+
+    assert (
+        briefing.evidence.supplier_status
+        is not None
+    )
+
+    assert (
+        "Synthetic alternative supplier"
+        in briefing.evidence.supplier_status
+    )
+
+    supplier_calls = [
+        call
+        for call in briefing.tool_trace
+        if call.tool
+        == "find_alternative_supplier"
+    ]
+
+    assert len(supplier_calls) == 1
+
+    assert (
+        supplier_calls[0].status
+        == ToolCallStatus.SUCCESS
+    )

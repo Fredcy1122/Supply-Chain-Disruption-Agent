@@ -28,11 +28,25 @@ EXPECTED_TOOLS = [
     "get_shipment",
     "get_historical_delay_context",
     "get_destination_weather",
+    "find_alternative_supplier",
 ]
 
 STANDING_LIMITATIONS = [
-    WEATHER_SCOPE_LIMITATION,
-    *UNCOLLECTED_EVIDENCE_LIMITATIONS,
+    (
+        "Weather describes the geocoded destination city over an "
+        "approximate window from the order date through the scheduled "
+        "shipping period. It does not represent the full shipment "
+        "route."
+    ),
+    (
+        "Inventory coverage was not collected because no inventory "
+        "data source is currently connected."
+    ),
+    (
+        "Supplier records and retrieved operational procedures are "
+        "synthetic demonstration data and are not real company "
+        "records or policies."
+    ),
 ]
 
 TERMINAL_EVENTS = {"done", "error"}
@@ -169,7 +183,14 @@ def test_done_payload_matches_synchronous_response(client, high_risk):
     assert done["shipment_id"] == "SHP-153440"
     assert done["risk_level"] == "HIGH"
     assert done["delay_probability"] == 0.82
-    assert done["limitations"] == STANDING_LIMITATIONS
+    for limitation in STANDING_LIMITATIONS:
+        assert limitation in done["limitations"]
+
+    assert any(
+        "Supplier records are synthetic demonstration data"
+        in limitation
+        for limitation in done["limitations"]
+    )
 
 
 # ============================================================
@@ -209,7 +230,21 @@ def test_weather_failure_emits_tool_error_and_continues(
     name, done = events[-1]
     assert name == "done"
     assert done["evidence"]["weather_summary"] is None
-    assert done["tool_trace"][-1]["status"] == "error"
+    weather_call = next(
+        call
+        for call in done["tool_trace"]
+        if call["tool"] == "get_destination_weather"
+    )
+
+    assert weather_call["status"] == "error"
+
+    supplier_call = next(
+        call
+        for call in done["tool_trace"]
+        if call["tool"] == "find_alternative_supplier"
+    )
+
+    assert supplier_call["status"] == "success"
     assert done["limitations"] == [
         "Weather evidence was not collected: "
         "Open-Meteo did not respond within 10 seconds.",
@@ -239,10 +274,30 @@ def test_historical_context_failure_emits_tool_error_and_continues(
         for name, data in events
         if name.startswith("tool_")
     ][4:] == [
-        ("tool_start", "get_historical_delay_context"),
-        ("tool_error", "get_historical_delay_context"),
-        ("tool_start", "get_destination_weather"),
-        ("tool_complete", "get_destination_weather"),
+        (
+            "tool_start",
+            "get_historical_delay_context",
+        ),
+        (
+            "tool_error",
+            "get_historical_delay_context",
+        ),
+        (
+            "tool_start",
+            "get_destination_weather",
+        ),
+        (
+            "tool_complete",
+            "get_destination_weather",
+        ),
+        (
+            "tool_start",
+            "find_alternative_supplier",
+        ),
+        (
+            "tool_complete",
+            "find_alternative_supplier",
+        ),
     ]
 
     name, done = events[-1]
@@ -361,7 +416,7 @@ def test_briefing_failure_ends_stream_with_error(
     events = stream(client)
 
     # Every tool succeeded, but without a briefing there is no done event.
-    assert names(events).count("tool_complete") == 4
+    assert names(events).count("tool_complete") == 5
     assert "tool_error" not in names(events)
     assert "done" not in names(events)
     assert events[-1][1]["status"] == 500
