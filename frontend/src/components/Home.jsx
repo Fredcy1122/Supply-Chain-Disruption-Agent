@@ -4,6 +4,7 @@ import {
   StatusChip,
   money,
   pct,
+  precisePct,
 } from "./ui.jsx";
 
 
@@ -291,7 +292,7 @@ export default function Home({
                     />
 
                     <strong>
-                      {pct(
+                      {precisePct(
                         shipment
                           .delayProbability,
                       )}

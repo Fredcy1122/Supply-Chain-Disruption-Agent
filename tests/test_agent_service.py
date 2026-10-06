@@ -390,3 +390,20 @@ def assert_standard_limitations(
         in limitation
         for limitation in limitations
     )
+
+def test_historical_summary_names_highest_factor():
+    shipment = get_shipment(
+        "SHP-153452"
+    )
+
+    context = get_historical_delay_context(
+        shipment
+    )
+
+    summary = _summarize_historical_context(
+        context
+    )
+
+    assert shipment.shipping_mode in summary
+    assert "Highest factor:" in summary
+    assert "shipping mode" in summary
