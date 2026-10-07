@@ -372,13 +372,68 @@ export async function loadShipment(
   );
 }
 
+async function mapWithConcurrency(
+  values,
+  limit,
+  operation,
+) {
+  const results = new Array(
+    values.length,
+  );
+
+  let nextIndex = 0;
+
+  async function worker() {
+    for (;;) {
+      const index = nextIndex;
+
+      nextIndex += 1;
+
+      if (index >= values.length) {
+        return;
+      }
+
+      try {
+        const value = await operation(
+          values[index],
+        );
+
+        results[index] = {
+          status: "fulfilled",
+          value,
+        };
+      } catch (reason) {
+        results[index] = {
+          status: "rejected",
+          reason,
+        };
+      }
+    }
+  }
+
+  const workerCount = Math.min(
+    limit,
+    values.length,
+  );
+
+  await Promise.all(
+    Array.from(
+      {
+        length: workerCount,
+      },
+      () => worker(),
+    ),
+  );
+
+  return results;
+}
 
 export async function getShipments() {
   const results = (
-    await Promise.allSettled(
-      DEMO_SHIPMENTS.map(
-        loadShipment,
-      ),
+    await mapWithConcurrency(
+      DEMO_SHIPMENTS,
+      3,
+      loadShipment,
     )
   );
 

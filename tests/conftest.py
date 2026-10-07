@@ -1,5 +1,8 @@
 import pandas as pd
 import pytest
+from types import SimpleNamespace
+
+import requests
 
 from backend.models.schemas import (
     LLMBriefingContent,
@@ -76,10 +79,19 @@ def no_live_weather(monkeypatch):
             "Tests must not call the live weather API."
         )
 
+    weather_requests = SimpleNamespace(
+        get=network_blocked,
+        exceptions=requests.exceptions,
+        Timeout=requests.Timeout,
+        ConnectionError=requests.ConnectionError,
+        HTTPError=requests.HTTPError,
+        RequestException=requests.RequestException,
+    )
+
     monkeypatch.setattr(
-        weather_service.requests,
-        "get",
-        network_blocked,
+        weather_service,
+        "requests",
+        weather_requests,
     )
 
     monkeypatch.setattr(
@@ -106,6 +118,53 @@ def mock_azure_briefing(monkeypatch):
     not consume Azure tokens or depend on network availability. Real
     Azure behavior is tested separately by integration tests.
     """
+    retrieved_documents = [
+        {
+            "rank": 1,
+            "source": "01_shipment_delay_escalation.pdf",
+            "source_path": "01_shipment_delay_escalation.pdf",
+            "relevance_score": 0.91,
+            "content": (
+                "Elevated-risk shipments require investigation "
+                "and human operational review."
+            ),
+            "metadata": {
+                "data_source": "SYNTHETIC_MVP",
+            },
+        },
+        {
+            "rank": 2,
+            "source": "02_weather_disruption_sop.pdf",
+            "source_path": "02_weather_disruption_sop.pdf",
+            "relevance_score": 0.84,
+            "content": (
+                "Low-severity weather does not independently "
+                "justify immediate rerouting."
+            ),
+            "metadata": {
+                "data_source": "SYNTHETIC_MVP",
+            },
+        },
+        {
+            "rank": 3,
+            "source": "03_supplier_alternative_policy.pdf",
+            "source_path": "03_supplier_alternative_policy.pdf",
+            "relevance_score": 0.80,
+            "content": (
+                "Synthetic alternative suppliers require geographic, "
+                "capacity, commercial, and contractual validation."
+            ),
+            "metadata": {
+                "data_source": "SYNTHETIC_MVP",
+            },
+        },
+    ]
+
+    monkeypatch.setattr(
+        briefing_service,
+        "retrieve_operational_knowledge",
+        lambda query, k=5: retrieved_documents[:k],
+    )
 
     def deterministic_azure_briefing(
         shipment_id,

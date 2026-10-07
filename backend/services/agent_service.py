@@ -173,16 +173,44 @@ def _summarize_historical_context(
     context: dict[str, Any],
 ) -> str:
     """
-    Summarize the historical delay evidence returned by the tool.
+    Summarize historical delay evidence using user-friendly factor
+    names and their associated values.
     """
     rates = context["historical_delay_rates"]
 
+    highest_factor = context[
+        "highest_delay_rate_factor"
+    ]
+
+    factor_labels = {
+        "product": (
+            f"product '{context['product_name']}'"
+        ),
+        "market": (
+            f"market '{context['market']}'"
+        ),
+        "shipping_mode": (
+            f"shipping mode '{context['shipping_mode']}'"
+        ),
+    }
+
+    highest_factor_label = factor_labels.get(
+        highest_factor,
+        highest_factor.replace("_", " "),
+    )
+
+    highest_rate = rates[highest_factor]
+
     return (
         "Historical delay rates: "
-        f"product {rates['product']:.1%}, "
-        f"market {rates['market']:.1%}, "
-        f"shipping mode {rates['shipping_mode']:.1%}. "
-        f"Highest: {context['highest_delay_rate_factor']}."
+        f"product '{context['product_name']}' "
+        f"{rates['product']:.1%}, "
+        f"market '{context['market']}' "
+        f"{rates['market']:.1%}, "
+        f"shipping mode '{context['shipping_mode']}' "
+        f"{rates['shipping_mode']:.1%}. "
+        f"Highest factor: {highest_factor_label} "
+        f"at {highest_rate:.1%}."
     )
 
 

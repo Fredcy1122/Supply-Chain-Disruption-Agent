@@ -394,9 +394,8 @@ export default function Shipments({
           />
 
           <b>
-            {pct(
-              shipment
-                .delayProbability,
+            {precisePct(
+              shipment.delayProbability,
             )}
           </b>
         </div>

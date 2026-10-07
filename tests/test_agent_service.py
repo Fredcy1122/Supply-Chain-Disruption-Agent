@@ -16,6 +16,13 @@ from backend.services.agent_service import (
     run_investigation,
 )
 from backend.services.shipment_service import ShipmentNotFoundError
+from backend.services.agent_tools import (
+    get_alternative_suppliers,
+    get_delay_risk,
+    get_destination_weather,
+    get_historical_delay_context,
+    get_shipment,
+)
 
 pytestmark = pytest.mark.usefixtures(
     "mock_azure_briefing"
@@ -95,8 +102,10 @@ def test_successful_investigation_returns_briefing(high_risk):
         "2017-05-01."
     )
     assert briefing.evidence.historical_delay_summary == (
-        "Historical delay rates: product 57.0%, market 55.0%, "
-        "shipping mode 38.0%. Highest: product."
+        "Historical delay rates: product 'Trail Running Shoe' "
+        "57.0%, market 'LATAM' 55.0%, shipping mode "
+        "'Standard Class' 38.0%. Highest factor: product "
+        "'Trail Running Shoe' at 57.0%."
     )
 
 
@@ -389,4 +398,36 @@ def assert_standard_limitations(
         "Human approval is required before changing suppliers"
         in limitation
         for limitation in limitations
+    )
+
+def test_historical_summary_names_highest_factor(
+    shipment,
+):
+    context = get_historical_delay_context(
+        shipment
+    )
+
+    assert (
+        context["highest_delay_rate_factor"]
+        == "product"
+    )
+
+    assert (
+        context["historical_delay_rates"]["product"]
+        == 0.57
+    )
+
+    assert (
+        context["product_name"]
+        == "Trail Running Shoe"
+    )
+
+    assert (
+        context["market"]
+        == "LATAM"
+    )
+
+    assert (
+        context["shipping_mode"]
+        == "Standard Class"
     )

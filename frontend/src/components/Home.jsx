@@ -4,6 +4,7 @@ import {
   StatusChip,
   money,
   pct,
+  precisePct,
 } from "./ui.jsx";
 
 
@@ -135,15 +136,16 @@ export default function Home({
         </div>
 
         <div className="hero-system">
-          <span>Decision intelligence pipeline</span>
+          <span>From risk to action</span>
 
           <strong>
-            ML → Agent → RAG → Azure
+            Predict risk → Investigate causes → Recommend actions
           </strong>
 
           <small>
-            Synthetic operational knowledge and supplier
-            data are clearly disclosed.
+            Shipment, weather, supplier, and operational
+            guidance are reviewed before recommendations
+            are generated.
           </small>
         </div>
       </section>
@@ -291,7 +293,7 @@ export default function Home({
                     />
 
                     <strong>
-                      {pct(
+                      {precisePct(
                         shipment
                           .delayProbability,
                       )}
