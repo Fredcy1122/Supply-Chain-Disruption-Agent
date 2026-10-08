@@ -25,15 +25,30 @@ Grounding rules:
 1. Do not invent shipment facts.
 2. Do not invent weather conditions.
 3. Do not invent supplier availability or supplier performance.
-4. Do not invent inventory levels or inventory coverage.
+4. Do not invent inventory levels, inventory coverage, demand,
+   replenishment quantities, or replenishment dates.
 5. Do not invent policy citations.
 6. Do not claim that a recommended action has already been executed.
 7. Clearly distinguish model prediction from collected evidence.
-8. Treat supplier records and operational documents labelled
-   SYNTHETIC_MVP as demonstration data.
-9. Recommend human review before changing suppliers, rerouting a
-   shipment, reallocating inventory, or changing customer commitments.
-10. Low-severity weather alone does not justify immediate rerouting.
+8. Delay probability represents the likelihood of delay. It is not a
+   prediction of delay duration or the number of delay days.
+9. Do not compare inventory coverage with a predicted delay duration
+   unless a delay duration was explicitly supplied by the application.
+10. Do not claim that a stockout is certain. Describe stockout risk or
+    inventory exposure using the supplied Inventory Tool evidence.
+11. Do not treat incoming inventory as guaranteed, received, reserved,
+    or available unless the supplied evidence explicitly verifies it.
+12. Treat supplier records, inventory records, and operational
+    documents labelled SYNTHETIC_MVP as demonstration data.
+13. Recommend human review before changing suppliers, rerouting a
+    shipment, reallocating inventory, expediting replenishment, or
+    changing customer commitments.
+14. Low-severity weather alone does not justify immediate rerouting.
+15. When inventory evidence is available, use the supplied stock,
+    demand, coverage, threshold, risk, warehouse, and replenishment
+    values exactly.
+16. When inventory evidence is unavailable, state that stockout
+    exposure cannot be confirmed.
 
 Return valid JSON containing exactly these fields:
 
@@ -47,7 +62,6 @@ Return valid JSON containing exactly these fields:
   ]
 }
 """.strip()
-
 
 def validate_azure_chat_configuration() -> None:
     """
@@ -103,8 +117,13 @@ def build_llm_input(
 ) -> str:
     """
     Build the grounded user input passed to Azure OpenAI.
+
+    Structured Inventory Tool evidence remains inside collected_evidence
+    so Azure does not need to derive inventory values from prose.
     """
-    knowledge_items: list[dict[str, Any]] = []
+    knowledge_items: list[
+        dict[str, Any]
+    ] = []
 
     for item in retrieved_knowledge:
         knowledge_items.append(
@@ -135,10 +154,14 @@ def build_llm_input(
     payload = {
         "shipment": {
             "shipment_id": shipment_id,
-            "risk_level": risk_level.value,
+            "risk_level": (
+                risk_level.value
+            ),
             "delay_probability": (
                 delay_probability
             ),
+            "delay_duration_days": None,
+            "delay_duration_available": False,
         },
         "collected_evidence": (
             evidence.model_dump(
@@ -150,12 +173,38 @@ def build_llm_input(
         ),
         "instructions": [
             (
-                "Use only the supplied prediction, evidence, "
-                "and retrieved guidance."
+                "Use only the supplied prediction, collected "
+                "evidence, and retrieved guidance."
             ),
             (
                 "Keep the briefing concise and suitable for "
                 "an operations team."
+            ),
+            (
+                "Delay probability is not delay duration. Do not "
+                "invent or infer predicted delay days."
+            ),
+            (
+                "Do not compare inventory coverage with delay "
+                "duration because no delay-duration prediction "
+                "is supplied."
+            ),
+            (
+                "Use structured Inventory Tool values exactly as "
+                "provided."
+            ),
+            (
+                "Describe stockout risk cautiously. Do not claim "
+                "that a stockout is certain."
+            ),
+            (
+                "Treat incoming inventory as unverified until "
+                "arrival and operational availability are confirmed."
+            ),
+            (
+                "Require human validation before inventory transfer, "
+                "expedited replenishment, supplier change, rerouting, "
+                "or customer-commitment changes."
             ),
             (
                 "Do not recommend immediate rerouting when weather "
@@ -167,8 +216,12 @@ def build_llm_input(
                 "or contracted suppliers."
             ),
             (
-                "Do not claim inventory impact when inventory "
-                "coverage is unavailable."
+                "Do not describe synthetic inventory records as "
+                "live warehouse stock."
+            ),
+            (
+                "When inventory evidence is unavailable, state that "
+                "stockout exposure cannot be confirmed."
             ),
         ],
     }
@@ -178,7 +231,6 @@ def build_llm_input(
         ensure_ascii=False,
         indent=2,
     )
-
 
 def parse_llm_response(
     content: str,

@@ -9,6 +9,7 @@ from backend.models.schemas import (
     LLMBriefingContent,
     RiskLevel,
     ToolEvidence,
+    InventoryStatusResponse,
 )
 from backend.services import briefing_service
 from backend.services.briefing_service import (
@@ -241,6 +242,69 @@ def mock_external_briefing_dependencies(
         mock_generate_azure_briefing,
     )
 
+def make_inventory_evidence(
+    risk_level: RiskLevel,
+    coverage: float,
+    available_stock: int,
+    safety_stock: int,
+    reorder_point: int,
+    incoming_quantity: int = 0,
+    destination_country_match: bool = True,
+) -> ToolEvidence:
+    inventory = InventoryStatusResponse(
+        inventory_id="INV-TEST",
+        product_id="PROD-TEST",
+        product_name="Trail Running Shoe",
+        category="Cleats",
+        department="Footwear",
+        warehouse_id="WH-TEST",
+        warehouse_location="Sao Paulo",
+        warehouse_country="Brazil",
+        supplier_id="SUP-TEST",
+        current_stock=(
+            available_stock + 100
+        ),
+        reserved_stock=100,
+        available_stock=available_stock,
+        daily_demand=50,
+        safety_stock=safety_stock,
+        reorder_point=reorder_point,
+        incoming_quantity=(
+            incoming_quantity
+        ),
+        expected_replenishment_date=None,
+        inventory_coverage_days=coverage,
+        stockout_risk=risk_level,
+        below_safety_stock=(
+            available_stock
+            <= safety_stock
+        ),
+        below_reorder_point=(
+            available_stock
+            <= reorder_point
+        ),
+        calculation_verified=True,
+        destination_country="Brasil",
+        destination_country_match=(
+            destination_country_match
+        ),
+        data_source="SYNTHETIC_MVP",
+        limitation=(
+            "Inventory records are synthetic "
+            "demonstration data."
+        ),
+    )
+
+    return ToolEvidence(
+        inventory_summary=(
+            "Synthetic inventory evidence for Trail Running Shoe: "
+            f"{available_stock} units available, "
+            f"{coverage:g} days of coverage, and "
+            f"{risk_level.value} stockout risk."
+        ),
+        inventory_status=inventory,
+        inventory_coverage_days=coverage,
+    )
 
 def make_briefing(
     evidence: ToolEvidence,
@@ -256,6 +320,148 @@ def make_briefing(
         evidence=evidence,
     )
 
+def test_rag_query_contains_structured_inventory():
+    evidence = make_inventory_evidence(
+        risk_level=RiskLevel.HIGH,
+        coverage=3.93,
+        available_stock=428,
+        safety_stock=572,
+        reorder_point=888,
+        incoming_quantity=0,
+        destination_country_match=False,
+    )
+
+    query = briefing_service.build_rag_query(
+        shipment_id="SHP-153444",
+        risk_level=RiskLevel.HIGH,
+        delay_probability=0.82,
+        evidence=evidence,
+    )
+
+    assert (
+        "Available inventory stock: 428 units."
+        in query
+    )
+
+    assert (
+        "Inventory coverage: 3.93 days."
+        in query
+    )
+
+    assert (
+        "Safety stock: 572 units."
+        in query
+    )
+
+    assert (
+        "Reorder point: 888 units."
+        in query
+    )
+
+    assert (
+        "Stockout risk: HIGH."
+        in query
+    )
+
+    assert (
+        "Incoming replenishment quantity: 0 units."
+        in query
+    )
+
+    assert (
+        "Delay probability is not a prediction "
+        "of the number of delay days."
+        in query
+    )
+
+def test_high_inventory_risk_escalates_human_review():
+    evidence = make_inventory_evidence(
+        risk_level=RiskLevel.HIGH,
+        coverage=3.93,
+        available_stock=428,
+        safety_stock=572,
+        reorder_point=888,
+    )
+
+    actions = (
+        briefing_service
+        .build_deterministic_actions(
+            risk_level=RiskLevel.HIGH,
+            evidence=evidence,
+            retrieved_knowledge=[],
+        )
+    )
+
+    assert any(
+        (
+            "at or below safety stock"
+            in action.lower()
+        )
+        for action in actions
+    )
+
+
+def test_medium_inventory_risk_reviews_replenishment():
+    evidence = make_inventory_evidence(
+        risk_level=RiskLevel.MEDIUM,
+        coverage=6.0,
+        available_stock=300,
+        safety_stock=200,
+        reorder_point=450,
+        incoming_quantity=200,
+    )
+
+    actions = (
+        briefing_service
+        .build_deterministic_actions(
+            risk_level=RiskLevel.MEDIUM,
+            evidence=evidence,
+            retrieved_knowledge=[],
+        )
+    )
+
+    assert any(
+        (
+            "review replenishment timing"
+            in action.lower()
+        )
+        for action in actions
+    )
+
+    assert any(
+        (
+            "confirm the recorded incoming quantity"
+            in action.lower()
+        )
+        for action in actions
+    )
+
+
+def test_low_inventory_risk_recommends_monitoring():
+    evidence = make_inventory_evidence(
+        risk_level=RiskLevel.LOW,
+        coverage=16.0,
+        available_stock=800,
+        safety_stock=200,
+        reorder_point=450,
+    )
+
+    actions = (
+        briefing_service
+        .build_deterministic_actions(
+            risk_level=RiskLevel.MEDIUM,
+            evidence=evidence,
+            retrieved_knowledge=[],
+        )
+    )
+
+    assert any(
+        (
+            "low stockout risk"
+            in action.lower()
+        )
+        for action in actions
+    )   
 
 def test_summary_formats_probability_as_clean_percentage(
     shipment_data,

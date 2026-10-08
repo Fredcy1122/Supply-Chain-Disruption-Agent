@@ -22,6 +22,17 @@ from rag.retrieval import (
 
 logger = logging.getLogger(__name__)
 
+def format_coverage_days(
+    coverage: float,
+) -> str:
+    """
+    Format inventory coverage without unnecessary trailing zeros.
+    """
+    return format(
+        coverage,
+        "g",
+    )
+
 
 def build_rag_query(
     shipment_id: str,
@@ -31,18 +42,26 @@ def build_rag_query(
 ) -> str:
     """
     Build a grounded retrieval query from evidence collected by
-    the agent tools.
+    the Agent Tools.
+
+    Delay probability represents the likelihood of delay. It must not
+    be interpreted as a delay duration.
     """
     query_parts = [
         "Supply-chain shipment disruption investigation.",
         f"Shipment reference: {shipment_id}",
         f"Risk level: {risk_level.value}",
         f"Delay probability: {delay_probability:.4f}",
+        (
+            "Delay probability is not a prediction of the number "
+            "of delay days."
+        ),
     ]
 
     if evidence.shipment_summary:
         query_parts.append(
-            f"Shipment evidence: {evidence.shipment_summary}"
+            "Shipment evidence: "
+            f"{evidence.shipment_summary}"
         )
 
     if evidence.historical_delay_summary:
@@ -53,22 +72,122 @@ def build_rag_query(
 
     if evidence.weather_summary:
         query_parts.append(
-            f"Weather evidence: {evidence.weather_summary}"
+            "Weather evidence: "
+            f"{evidence.weather_summary}"
         )
 
     if evidence.supplier_status:
         query_parts.append(
-            f"Supplier evidence: {evidence.supplier_status}"
+            "Supplier evidence: "
+            f"{evidence.supplier_status}"
         )
     else:
         query_parts.append(
             "Supplier evidence is not currently available."
         )
 
-    if evidence.inventory_coverage_days is not None:
+    inventory = evidence.inventory_status
+
+    if inventory is not None:
+        coverage_text = format_coverage_days(
+            inventory.inventory_coverage_days
+        )
+
+        query_parts.extend(
+            [
+                (
+                    "Inventory product: "
+                    f"{inventory.product_name}"
+                ),
+                (
+                    "Inventory warehouse: "
+                    f"{inventory.warehouse_id}, "
+                    f"{inventory.warehouse_location}, "
+                    f"{inventory.warehouse_country}"
+                ),
+                (
+                    "Current inventory stock: "
+                    f"{inventory.current_stock} units."
+                ),
+                (
+                    "Reserved inventory stock: "
+                    f"{inventory.reserved_stock} units."
+                ),
+                (
+                    "Available inventory stock: "
+                    f"{inventory.available_stock} units."
+                ),
+                (
+                    "Average daily demand: "
+                    f"{inventory.daily_demand} units per day."
+                ),
+                (
+                    "Inventory coverage: "
+                    f"{coverage_text} days."
+                ),
+                (
+                    "Safety stock: "
+                    f"{inventory.safety_stock} units."
+                ),
+                (
+                    "Reorder point: "
+                    f"{inventory.reorder_point} units."
+                ),
+                (
+                    "Stockout risk: "
+                    f"{inventory.stockout_risk.value}."
+                ),
+                (
+                    "Below safety stock: "
+                    f"{inventory.below_safety_stock}."
+                ),
+                (
+                    "Below reorder point: "
+                    f"{inventory.below_reorder_point}."
+                ),
+                (
+                    "Incoming replenishment quantity: "
+                    f"{inventory.incoming_quantity} units."
+                ),
+                (
+                    "Expected replenishment date: "
+                    + (
+                        inventory
+                        .expected_replenishment_date
+                        .isoformat()
+                        if inventory
+                        .expected_replenishment_date
+                        is not None
+                        else "not available"
+                    )
+                    + "."
+                ),
+                (
+                    "Warehouse country matches shipment destination: "
+                    f"{inventory.destination_country_match}."
+                ),
+                (
+                    "Inventory source: synthetic demonstration data."
+                ),
+            ]
+        )
+
+        if evidence.inventory_summary:
+            query_parts.append(
+                "Inventory evidence summary: "
+                f"{evidence.inventory_summary}"
+            )
+    elif (
+        evidence.inventory_coverage_days
+        is not None
+    ):
+        coverage_text = format_coverage_days(
+            evidence.inventory_coverage_days
+        )
+
         query_parts.append(
             "Inventory coverage: "
-            f"{evidence.inventory_coverage_days} days."
+            f"{coverage_text} days."
         )
     else:
         query_parts.append(
@@ -77,16 +196,34 @@ def build_rag_query(
 
     query_parts.extend(
         [
-            "Retrieve the most relevant operational procedures.",
-            "Identify appropriate monitoring, escalation, weather, "
-            "supplier, inventory, and rerouting guidance.",
-            "Do not assume facts that are not contained in the "
-            "collected evidence.",
+            (
+                "Retrieve the most relevant operational "
+                "procedures."
+            ),
+            (
+                "Prioritize shipment escalation, inventory "
+                "stockout response, replenishment, supplier, "
+                "weather, and rerouting guidance supported by "
+                "the collected evidence."
+            ),
+            (
+                "Do not assume facts that are not contained "
+                "in the collected evidence."
+            ),
+            (
+                "Do not infer delay duration from delay "
+                "probability."
+            ),
+            (
+                "Do not treat incoming inventory as guaranteed "
+                "or operationally available."
+            ),
         ]
     )
 
-    return "\n".join(query_parts)
-
+    return "\n".join(
+        query_parts
+    )
 
 def extract_rag_citations(
     retrieved_knowledge: list[dict[str, Any]],
@@ -188,7 +325,8 @@ def build_deterministic_actions(
     Build conservative deterministic recommendations.
 
     This function is used when Azure OpenAI cannot generate a valid
-    briefing.
+    briefing. Recommendations remain grounded in collected evidence
+    and require human operational review.
     """
     actions: list[str] = []
 
@@ -215,7 +353,9 @@ def build_deterministic_actions(
         )
 
     if evidence.weather_summary:
-        weather_text = evidence.weather_summary.lower()
+        weather_text = (
+            evidence.weather_summary.lower()
+        )
 
         severe_weather_terms = (
             "high severity",
@@ -247,7 +387,10 @@ def build_deterministic_actions(
             for term in low_weather_terms
         )
 
-        if severe_weather and not low_weather:
+        if (
+            severe_weather
+            and not low_weather
+        ):
             actions.append(
                 "Evaluate transport alternatives because the "
                 "collected weather evidence indicates potentially "
@@ -277,16 +420,74 @@ def build_deterministic_actions(
             "before recommending an alternative supplier."
         )
 
-    if evidence.inventory_coverage_days is not None:
-        if evidence.inventory_coverage_days <= 3:
+    inventory = evidence.inventory_status
+
+    if inventory is not None:
+        if (
+            inventory.stockout_risk
+            == RiskLevel.HIGH
+        ):
+            actions.append(
+                "Escalate the synthetic inventory exposure for "
+                "immediate human review because available stock is "
+                "at or below safety stock."
+            )
+        elif (
+            inventory.stockout_risk
+            == RiskLevel.MEDIUM
+        ):
+            actions.append(
+                "Review replenishment timing because synthetic "
+                "inventory coverage is limited or available stock "
+                "is at or below the reorder point."
+            )
+        else:
+            actions.append(
+                "Continue monitoring inventory coverage because "
+                "the synthetic inventory record currently indicates "
+                "low stockout risk."
+            )
+
+        if inventory.below_reorder_point:
+            actions.append(
+                "Confirm the replenishment plan because available "
+                "stock is at or below the synthetic reorder point."
+            )
+
+        if inventory.incoming_quantity > 0:
+            actions.append(
+                "Confirm the recorded incoming quantity and expected "
+                "replenishment date before relying on incoming "
+                "inventory as mitigation."
+            )
+        else:
+            actions.append(
+                "Review alternative replenishment options because no "
+                "incoming inventory quantity is recorded."
+            )
+
+        if not inventory.destination_country_match:
+            actions.append(
+                "Validate warehouse geography and transfer "
+                "feasibility because the synthetic warehouse country "
+                "does not match the shipment destination country."
+            )
+    elif (
+        evidence.inventory_coverage_days
+        is not None
+    ):
+        if (
+            evidence.inventory_coverage_days
+            <= 3
+        ):
             actions.append(
                 "Escalate potential stockout exposure because "
                 "inventory coverage is three days or less."
             )
         else:
             actions.append(
-                "Compare the likely disruption duration with the "
-                "available inventory coverage."
+                "Review available inventory coverage without "
+                "assuming a delay duration that was not predicted."
             )
     else:
         actions.append(
@@ -376,15 +577,32 @@ def build_deterministic_briefing(
             "Supplier availability has not yet been assessed."
         )
 
-    if evidence.inventory_coverage_days is not None:
+    if evidence.inventory_summary:
+        summary_parts.append(
+            evidence.inventory_summary
+        )
+
+        risk_factors.append(
+            evidence.inventory_summary
+        )
+    elif (
+        evidence.inventory_coverage_days
+        is not None
+    ):
+        coverage_text = format_coverage_days(
+            evidence.inventory_coverage_days
+        )
+
         summary_parts.append(
             "Available inventory coverage is "
-            f"{evidence.inventory_coverage_days} days."
+            f"{coverage_text} days."
         )
     else:
         summary_parts.append(
-            "Inventory coverage has not yet been assessed."
+            "Inventory coverage has not yet been assessed, so "
+            "stockout exposure cannot be confirmed."
         )
+
 
     summary_parts.append(
         build_guidance_summary(

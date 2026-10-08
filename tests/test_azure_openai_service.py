@@ -1,5 +1,6 @@
 import json
 from types import SimpleNamespace
+from datetime import date
 
 import pytest
 
@@ -9,6 +10,7 @@ from backend.exceptions import (
 from backend.models.schemas import (
     RiskLevel,
     ToolEvidence,
+    InventoryStatusResponse,
 )
 from backend.services import azure_openai_service
 
@@ -45,6 +47,55 @@ def evidence():
         inventory_coverage_days=None,
     )
 
+@pytest.fixture
+def inventory_evidence():
+    inventory = InventoryStatusResponse(
+        inventory_id="INV-TEST",
+        product_id="PROD-TEST",
+        product_name=(
+            "Perfect Fitness Perfect Rip Deck"
+        ),
+        category="Cleats",
+        department="Apparel",
+        warehouse_id="WH-015",
+        warehouse_location="Singapore",
+        warehouse_country="Singapore",
+        supplier_id="SUP013",
+        current_stock=453,
+        reserved_stock=25,
+        available_stock=428,
+        daily_demand=109,
+        safety_stock=572,
+        reorder_point=888,
+        incoming_quantity=0,
+        expected_replenishment_date=None,
+        inventory_coverage_days=3.93,
+        stockout_risk=RiskLevel.HIGH,
+        below_safety_stock=True,
+        below_reorder_point=True,
+        calculation_verified=True,
+        destination_country="Brasil",
+        destination_country_match=False,
+        data_source="SYNTHETIC_MVP",
+        limitation=(
+            "Inventory records are synthetic "
+            "demonstration data."
+        ),
+    )
+
+    return ToolEvidence(
+        shipment_summary=(
+            "SHP-153444: 1 x Perfect Fitness Perfect Rip Deck "
+            "to Indaial, Brasil by Standard Class."
+        ),
+        inventory_summary=(
+            "Synthetic inventory evidence indicates 428 units "
+            "available and 3.93 days of coverage with HIGH "
+            "stockout risk."
+        ),
+        inventory_status=inventory,
+        inventory_coverage_days=3.93,
+    )
 
 @pytest.fixture
 def retrieved_knowledge():
@@ -113,6 +164,76 @@ def make_mock_client(
         chat=chat
     )
 
+def test_build_llm_input_contains_structured_inventory(
+    inventory_evidence,
+    retrieved_knowledge,
+):
+    result = (
+        azure_openai_service
+        .build_llm_input(
+            shipment_id="SHP-153444",
+            risk_level=RiskLevel.HIGH,
+            delay_probability=0.82,
+            evidence=inventory_evidence,
+            retrieved_knowledge=(
+                retrieved_knowledge
+            ),
+        )
+    )
+
+    payload = json.loads(
+        result
+    )
+
+    inventory = payload[
+        "collected_evidence"
+    ]["inventory_status"]
+
+    assert inventory[
+        "available_stock"
+    ] == 428
+
+    assert inventory[
+        "daily_demand"
+    ] == 109
+
+    assert inventory[
+        "inventory_coverage_days"
+    ] == 3.93
+
+    assert inventory[
+        "stockout_risk"
+    ] == "HIGH"
+
+    assert inventory[
+        "below_safety_stock"
+    ] is True
+
+    assert inventory[
+        "below_reorder_point"
+    ] is True
+
+    assert inventory[
+        "incoming_quantity"
+    ] == 0
+
+    assert inventory[
+        "destination_country_match"
+    ] is False
+
+    assert (
+        payload["shipment"][
+            "delay_duration_days"
+        ]
+        is None
+    )
+
+    assert (
+        payload["shipment"][
+            "delay_duration_available"
+        ]
+        is False
+    )
 
 def test_build_llm_input_contains_grounded_evidence(
     evidence,
@@ -353,18 +474,72 @@ def test_generate_rejects_invalid_probability(
 
 
 def test_system_prompt_prohibits_invention():
-    prompt = (
-        azure_openai_service.SYSTEM_PROMPT
+    prompt = " ".join(
+        azure_openai_service
+        .SYSTEM_PROMPT
         .lower()
+        .split()
     )
 
-    assert "do not invent shipment facts" in prompt
-    assert "do not invent weather conditions" in prompt
-    assert "do not invent inventory" in prompt
-    assert "do not invent policy citations" in prompt
+    assert (
+        "do not invent shipment facts"
+        in prompt
+    )
+
+    assert (
+        "do not invent weather conditions"
+        in prompt
+    )
+
+    assert (
+        "do not invent inventory"
+        in prompt
+    )
+
+    assert (
+        "do not invent policy citations"
+        in prompt
+    )
+
     assert "synthetic_mvp" in prompt
+
     assert (
         "does not justify immediate rerouting"
+        in prompt
+    )
+
+    assert (
+        "delay probability"
+        in prompt
+    )
+
+    assert (
+        "not a prediction of delay duration"
+        in prompt
+    )
+
+    assert (
+        "do not claim that a stockout is certain"
+        in prompt
+    )
+
+    assert (
+        "do not treat incoming inventory as guaranteed"
+        in prompt
+    )
+
+    assert (
+        "inventory records"
+        in prompt
+    )
+
+    assert (
+        "synthetic_mvp"
+        in prompt
+    )
+
+    assert (
+        "demonstration data"
         in prompt
     )
 
