@@ -3,7 +3,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api import routes_agent
-from backend.exceptions import WeatherServiceError
+from backend.exceptions import (
+    InventoryServiceError,
+    WeatherServiceError,
+)
 from backend.models.schemas import (
     DisruptionBriefingResponse,
     RiskLevel,
@@ -25,7 +28,8 @@ from backend.services.agent_tools import (
 )
 
 pytestmark = pytest.mark.usefixtures(
-    "mock_azure_briefing"
+    "mock_azure_briefing",
+    "mock_inventory_tool",
 )
 
 EXPECTED_TOOLS = [
@@ -34,6 +38,7 @@ EXPECTED_TOOLS = [
     "get_historical_delay_context",
     "get_destination_weather",
     "find_alternative_supplier",
+    "get_inventory_coverage",
 ]
 
 EXPECTED_TOOL_INPUTS = {
@@ -55,6 +60,11 @@ EXPECTED_TOOL_INPUTS = {
         "required_quantity": 2,
         "limit": 3,
     },
+    "get_inventory_coverage": {
+        "shipment_id": "SHP-153440",
+        "product_name": "Trail Running Shoe",
+        "destination_country": "Brasil",
+    },
 }
 
 
@@ -66,13 +76,9 @@ STANDING_LIMITATIONS = [
         "route."
     ),
     (
-        "Inventory coverage was not collected because no inventory "
-        "data source is currently connected."
-    ),
-    (
-        "Supplier records and retrieved operational procedures are "
-        "synthetic demonstration data and are not real company "
-        "records or policies."
+        "Supplier records, inventory records, and retrieved "
+        "operational procedures are synthetic demonstration data "
+        "and are not real company records or policies."
     ),
 ]
 
@@ -109,7 +115,7 @@ def test_successful_investigation_returns_briefing(high_risk):
     )
 
 
-def test_investigation_does_not_invent_uncollected_evidence(
+def test_investigation_collects_grounded_optional_evidence(
     high_risk,
 ):
     evidence = run_investigation(
@@ -129,7 +135,19 @@ def test_investigation_does_not_invent_uncollected_evidence(
         in evidence.supplier_status
     )
 
-    assert evidence.inventory_coverage_days is None
+    assert evidence.inventory_summary is not None
+    assert evidence.inventory_status is not None
+    assert evidence.inventory_coverage_days == 6.0
+
+    assert (
+        evidence.inventory_status.stockout_risk
+        == RiskLevel.MEDIUM
+    )
+
+    assert (
+        "approximately 6 days of coverage"
+        in evidence.inventory_summary
+    )
 
 
 def test_tool_trace_records_each_call_in_order(high_risk):
@@ -146,6 +164,26 @@ def test_tool_trace_records_each_call_in_order(high_risk):
     assert trace[1].output["shipment_reference"] == "SHP-153440"
     assert trace[2].output["highest_delay_rate_factor"] == "product"
     assert trace[3].output["source"] == "Open-Meteo historical archive"
+    assert (
+        trace[4].output[
+            "recommended_supplier"
+        ]
+        is not None
+    )
+
+    assert (
+        trace[5].output[
+            "inventory_coverage_days"
+        ]
+        == 6.0
+    )
+
+    assert (
+        trace[5].output[
+            "stockout_risk"
+        ]
+        == "MEDIUM"
+    )
 
 
 def test_limitations_list_uncollected_evidence(
@@ -258,6 +296,19 @@ def test_risk_gate_rejects_low_risk_shipment(low_risk, monkeypatch):
     with pytest.raises(ValueError, match="LOW risk"):
         run_investigation("SHP-153440")
 
+    def inventory_must_not_run(
+        shipment,
+    ):
+        raise AssertionError(
+            "inventory tool must not run after rejection"
+        )
+
+    monkeypatch.setattr(
+        agent_service,
+        "get_inventory_coverage",
+        inventory_must_not_run,
+    )
+
 
 def test_unknown_shipment_raises_not_found(shipment_data, monkeypatch):
     def not_found(shipment_id):
@@ -303,6 +354,139 @@ def test_required_tool_failure_stops_investigation(high_risk, monkeypatch):
     with pytest.raises(RuntimeError, match="shipment data unavailable"):
         run_investigation("SHP-153440")
 
+def test_investigation_collects_inventory_evidence(
+    high_risk,
+):
+    briefing = run_investigation(
+        "SHP-153440"
+    )
+
+    inventory = (
+        briefing.evidence.inventory_status
+    )
+
+    assert inventory is not None
+
+    assert (
+        inventory.available_stock
+        == 300
+    )
+
+    assert (
+        inventory.daily_demand
+        == 50
+    )
+
+    assert (
+        inventory.inventory_coverage_days
+        == 6.0
+    )
+
+    assert (
+        inventory.stockout_risk
+        == RiskLevel.MEDIUM
+    )
+
+    assert (
+        inventory.below_safety_stock
+        is False
+    )
+
+    assert (
+        inventory.below_reorder_point
+        is True
+    )
+
+    assert (
+        briefing.evidence
+        .inventory_coverage_days
+        == 6.0
+    )
+
+    assert (
+        briefing.evidence
+        .inventory_summary
+        is not None
+    )
+
+    assert (
+        "approximately 6 days of coverage"
+        in briefing.evidence
+        .inventory_summary
+    )
+
+    inventory_calls = [
+        call
+        for call in briefing.tool_trace
+        if call.tool
+        == "get_inventory_coverage"
+    ]
+
+    assert len(
+        inventory_calls
+    ) == 1
+
+    assert (
+        inventory_calls[0].status
+        == ToolCallStatus.SUCCESS
+    )
+
+    assert (
+        inventory_calls[0].output[
+            "stockout_risk"
+        ]
+        == "MEDIUM"
+    )
+
+def test_inventory_failure_becomes_limitation(
+    high_risk,
+    monkeypatch,
+):
+    def unavailable_inventory(
+        shipment,
+    ):
+        raise InventoryServiceError(
+            "inventory source unavailable"
+        )
+
+    monkeypatch.setattr(
+        agent_service,
+        "get_inventory_coverage",
+        unavailable_inventory,
+    )
+
+    briefing = run_investigation(
+        "SHP-153440"
+    )
+
+    inventory_call = next(
+        call
+        for call in briefing.tool_trace
+        if call.tool
+        == "get_inventory_coverage"
+    )
+
+    assert (
+        inventory_call.status
+        == ToolCallStatus.ERROR
+    )
+
+    assert (
+        briefing.evidence.inventory_status
+        is None
+    )
+
+    assert (
+        briefing.evidence
+        .inventory_coverage_days
+        is None
+    )
+
+    assert (
+        "Inventory evidence was not collected because the "
+        "inventory service failed: inventory source unavailable"
+        in briefing.limitations
+    )
 
 # ============================================================
 # API

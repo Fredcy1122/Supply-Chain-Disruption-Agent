@@ -4,11 +4,14 @@ from typing import Any, Callable, Generator
 from pydantic import BaseModel
 
 from backend.exceptions import (
+    InventoryNotFoundError,
+    InventoryServiceError,
     InvestigationNotRequiredError,
     WeatherServiceError,
 )
 from backend.models.schemas import (
     DisruptionBriefingResponse,
+    InventoryStatusResponse,
     ShipmentResponse,
     ToolCall,
     ToolCallStatus,
@@ -19,6 +22,7 @@ from backend.services.agent_tools import (
     get_destination_weather,
     get_historical_delay_context,
     get_shipment,
+    get_inventory_coverage,
     get_alternative_suppliers,
 )
 from backend.services.briefing_service import (
@@ -39,13 +43,9 @@ WEATHER_SCOPE_LIMITATION = (
 
 UNCOLLECTED_EVIDENCE_LIMITATIONS = [
     (
-        "Inventory coverage was not collected because no inventory "
-        "data source is currently connected."
-    ),
-    (
-        "Supplier records and retrieved operational procedures are "
-        "synthetic demonstration data and are not real company "
-        "records or policies."
+        "Supplier records, inventory records, and retrieved "
+        "operational procedures are synthetic demonstration data "
+        "and are not real company records or policies."
     ),
 ]
 
@@ -267,6 +267,94 @@ def _summarize_supplier_recommendation(
         "verified."
     )
 
+def _summarize_inventory_status(
+    inventory: InventoryStatusResponse,
+) -> str:
+    """
+    Summarize synthetic inventory evidence for the briefing.
+    """
+    coverage_text = format(
+        inventory.inventory_coverage_days,
+        "g",
+    )
+
+    threshold_position = []
+
+    if inventory.below_safety_stock:
+        threshold_position.append(
+            "at or below safety stock"
+        )
+
+    if inventory.below_reorder_point:
+        threshold_position.append(
+            "at or below the reorder point"
+        )
+
+    if threshold_position:
+        threshold_summary = (
+            " Available inventory is "
+            + " and ".join(
+                threshold_position
+            )
+            + "."
+        )
+    else:
+        threshold_summary = (
+            " Available inventory is above both safety stock "
+            "and the reorder point."
+        )
+
+    replenishment_summary = ""
+
+    if inventory.incoming_quantity > 0:
+        if (
+            inventory.expected_replenishment_date
+            is not None
+        ):
+            replenishment_summary = (
+                f" A synthetic incoming quantity of "
+                f"{inventory.incoming_quantity} units is recorded "
+                f"for {inventory.expected_replenishment_date.isoformat()}, "
+                "but arrival and availability are not verified."
+            )
+        else:
+            replenishment_summary = (
+                f" A synthetic incoming quantity of "
+                f"{inventory.incoming_quantity} units is recorded, "
+                "but no expected replenishment date is available."
+            )
+    else:
+        replenishment_summary = (
+            " No incoming replenishment quantity is recorded."
+        )
+
+    location_summary = (
+        " The synthetic warehouse country matches the shipment "
+        "destination country."
+        if inventory.destination_country_match
+        else (
+            " The synthetic warehouse country does not match the "
+            "shipment destination country, so geographic suitability "
+            "requires review."
+        )
+    )
+
+    return (
+        f"Synthetic inventory evidence for "
+        f"'{inventory.product_name}' at warehouse "
+        f"{inventory.warehouse_id} in "
+        f"{inventory.warehouse_location}, "
+        f"{inventory.warehouse_country}: "
+        f"{inventory.available_stock} units available after "
+        f"{inventory.reserved_stock} reserved units, "
+        f"average demand {inventory.daily_demand} units/day, "
+        f"and approximately {coverage_text} days of coverage. "
+        f"Stockout risk is {inventory.stockout_risk.value}."
+        f"{threshold_summary}"
+        f"{replenishment_summary}"
+        f"{location_summary}"
+    )    
+
 def iter_investigation(
     shipment_id: str,
 ) -> Generator[
@@ -283,6 +371,8 @@ def iter_investigation(
         shipment lookup
         historical-delay evidence
         destination weather
+        alternative supplier evidence
+        inventory coverage evidence
         RAG retrieval
         disruption briefing
     """
@@ -415,6 +505,55 @@ def iter_investigation(
             "Supplier evidence was not collected because the "
             f"supplier service failed: {exc}"
         )
+
+    inventory_summary = None
+    inventory_status = None
+    inventory_coverage_days = None
+
+    try:
+        inventory_status = yield from _call_tool(
+            tool_trace=tool_trace,
+            tool="get_inventory_coverage",
+            tool_input={
+                "shipment_id": shipment_reference,
+                "product_name": shipment.product_name,
+                "destination_country": (
+                    shipment.destination_country
+                ),
+            },
+            function=lambda: get_inventory_coverage(
+                shipment
+            ),
+        )
+
+        inventory_summary = (
+            _summarize_inventory_status(
+                inventory_status
+            )
+        )
+
+        inventory_coverage_days = (
+            inventory_status
+            .inventory_coverage_days
+        )
+
+        limitations.append(
+            inventory_status.limitation
+        )
+
+    except InventoryNotFoundError as exc:
+        limitations.append(
+            "Inventory evidence was not collected because no "
+            "exact synthetic inventory record was found: "
+            f"{exc}"
+        )
+
+    except InventoryServiceError as exc:
+        limitations.append(
+            "Inventory evidence was not collected because the "
+            f"inventory service failed: {exc}"
+        )   
+
     evidence = ToolEvidence(
         shipment_summary=_summarize_shipment(
             shipment
@@ -424,7 +563,11 @@ def iter_investigation(
         ),
         weather_summary=weather_summary,
         supplier_status=supplier_status,
-        inventory_coverage_days=None,
+        inventory_summary=inventory_summary,
+        inventory_status=inventory_status,
+        inventory_coverage_days=(
+            inventory_coverage_days
+        ),
     )
 
     limitations.append(

@@ -6,7 +6,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.api import routes_agent
-from backend.exceptions import WeatherServiceError
+from backend.exceptions import (
+    InventoryServiceError,
+    WeatherServiceError,
+)
 from backend.models.schemas import DisruptionBriefingResponse
 from backend.services import agent_service
 from backend.services.agent_service import (
@@ -21,7 +24,8 @@ from backend.services.shipment_service import (
 )
 
 pytestmark = pytest.mark.usefixtures(
-    "mock_azure_briefing"
+    "mock_azure_briefing",
+    "mock_inventory_tool",
 )
 
 STREAM_URL = "/api/agent/investigate/SHP-153440/stream"
@@ -32,6 +36,7 @@ EXPECTED_TOOLS = [
     "get_historical_delay_context",
     "get_destination_weather",
     "find_alternative_supplier",
+    "get_inventory_coverage",
 ]
 
 EXPECTED_TOOL_INPUTS = {
@@ -53,6 +58,11 @@ EXPECTED_TOOL_INPUTS = {
         "required_quantity": 2,
         "limit": 3,
     },
+    "get_inventory_coverage": {
+        "shipment_id": "SHP-153440",
+        "product_name": "Trail Running Shoe",
+        "destination_country": "Brasil",
+    },
 }
 
 
@@ -64,13 +74,9 @@ STANDING_LIMITATIONS = [
         "route."
     ),
     (
-        "Inventory coverage was not collected because no inventory "
-        "data source is currently connected."
-    ),
-    (
-        "Supplier records and retrieved operational procedures are "
-        "synthetic demonstration data and are not real company "
-        "records or policies."
+        "Supplier records, inventory records, and retrieved "
+        "operational procedures are synthetic demonstration data "
+        "and are not real company records or policies."
     ),
 ]
 
@@ -233,6 +239,71 @@ def test_done_payload_matches_synchronous_response(client, high_risk):
 # OPTIONAL TOOL FAILURES
 # ============================================================
 
+def test_inventory_failure_emits_tool_error_and_continues(
+    client,
+    high_risk,
+    monkeypatch,
+):
+    def inventory_unavailable(
+        shipment,
+    ):
+        raise InventoryServiceError(
+            "inventory source unavailable"
+        )
+
+    monkeypatch.setattr(
+        agent_service,
+        "get_inventory_coverage",
+        inventory_unavailable,
+    )
+
+    events = stream(
+        client
+    )
+
+    assert (
+        "tool_error",
+        {
+            "name": "get_inventory_coverage",
+            "input": {
+                "shipment_id": "SHP-153440",
+                "product_name": "Trail Running Shoe",
+                "destination_country": "Brasil",
+            },
+            "output": None,
+            "status": "error",
+            "error": "inventory source unavailable",
+        },
+    ) in events
+
+    assert_single_terminal_event(
+        events
+    )
+
+    name, done = events[-1]
+
+    assert name == "done"
+
+    assert (
+        done["evidence"][
+            "inventory_status"
+        ]
+        is None
+    )
+
+    assert (
+        done["evidence"][
+            "inventory_coverage_days"
+        ]
+        is None
+    )
+
+    assert any(
+        "inventory service failed"
+        in limitation.lower()
+        for limitation
+        in done["limitations"]
+    )
 
 def test_weather_failure_emits_tool_error_and_continues(
     client,
@@ -337,6 +408,14 @@ def test_historical_context_failure_emits_tool_error_and_continues(
         (
             "tool_complete",
             "find_alternative_supplier",
+        ),
+        (
+            "tool_start",
+            "get_inventory_coverage",
+        ),
+        (
+            "tool_complete",
+            "get_inventory_coverage",
         ),
     ]
 
@@ -456,7 +535,7 @@ def test_briefing_failure_ends_stream_with_error(
     events = stream(client)
 
     # Every tool succeeded, but without a briefing there is no done event.
-    assert names(events).count("tool_complete") == 5
+    assert names(events).count("tool_complete") == 6
     assert "tool_error" not in names(events)
     assert "done" not in names(events)
     assert events[-1][1]["status"] == 500

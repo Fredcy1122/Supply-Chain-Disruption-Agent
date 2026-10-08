@@ -1,10 +1,12 @@
 from types import SimpleNamespace
+from datetime import date
 
 import pandas as pd
 import pytest
 import requests
 
 from backend.models.schemas import (
+    InventoryStatusResponse,
     LLMBriefingContent,
     PredictionResponse,
     RiskLevel,
@@ -480,6 +482,61 @@ def make_prediction(
         ),
     )
 
+@pytest.fixture
+def mock_inventory_tool(
+    monkeypatch,
+):
+    """
+    Return deterministic synthetic inventory evidence in Agent tests.
+
+    Inventory Service behavior is tested separately in
+    test_inventory_service.py.
+    """
+    inventory = InventoryStatusResponse(
+        inventory_id="INV-TEST",
+        product_id="PROD-TEST",
+        product_name="Trail Running Shoe",
+        category="Cleats",
+        department="Footwear",
+        warehouse_id="WH-TEST",
+        warehouse_location="Sao Paulo",
+        warehouse_country="Brazil",
+        supplier_id="SUP-TEST",
+        current_stock=400,
+        reserved_stock=100,
+        available_stock=300,
+        daily_demand=50,
+        safety_stock=200,
+        reorder_point=450,
+        incoming_quantity=200,
+        expected_replenishment_date=date(
+            2017,
+            5,
+            8,
+        ),
+        inventory_coverage_days=6.0,
+        stockout_risk=RiskLevel.MEDIUM,
+        below_safety_stock=False,
+        below_reorder_point=True,
+        calculation_verified=True,
+        destination_country="Brasil",
+        destination_country_match=True,
+        data_source="SYNTHETIC_MVP",
+        limitation=(
+            "Inventory records are synthetic demonstration data "
+            "and do not represent live warehouse stock. "
+            "Available stock, reservations, average demand, and "
+            "incoming replenishment require operational validation."
+        ),
+    )
+
+    monkeypatch.setattr(
+        agent_service,
+        "get_inventory_coverage",
+        lambda shipment: inventory,
+    )
+
+    return inventory
 
 @pytest.fixture
 def high_risk(
