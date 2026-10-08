@@ -36,6 +36,7 @@ export default function Actions({
   shipment,
   decisions,
   onDecide,
+  onViewBriefing,
 }) {
   if (!shipment) {
     return (
@@ -298,6 +299,37 @@ export default function Actions({
             )}
           </ul>
         </section>
+      )}
+      {shipment.briefing && (
+        <nav
+          className="page-navigation"
+          aria-label="Continue to disruption briefing"
+        >
+          <div>
+            <small className="eyebrow">
+              Final step
+            </small>
+
+            <strong>
+              Review the complete disruption briefing
+            </strong>
+
+            <p>
+              Open the executive summary, collected evidence,
+              recommended actions, policy citations, and
+              limitations.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            className="btn page-navigation-button"
+            onClick={onViewBriefing}
+          >
+            View disruption briefing
+            <span aria-hidden="true">→</span>
+          </button>
+        </nav>
       )}
     </div>
   );

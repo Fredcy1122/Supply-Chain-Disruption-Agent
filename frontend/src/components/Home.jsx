@@ -346,36 +346,6 @@ export default function Home({
         </div>
       </section>
 
-      <section className="panel architecture-note">
-        <div>
-          <small className="eyebrow">
-            How the assessment works
-          </small>
-
-          <h3>
-            Evidence remains separate from generated advice
-          </h3>
-
-          <p>
-            Prediction values, shipment records, weather,
-            supplier evidence, policy citations, and model
-            recommendations remain distinguishable throughout
-            the interface.
-          </p>
-        </div>
-
-        <div className="architecture-flow">
-          <span>Shipment</span>
-          <i>→</i>
-          <span>XGBoost</span>
-          <i>→</i>
-          <span>Agent tools</span>
-          <i>→</i>
-          <span>RAG</span>
-          <i>→</i>
-          <span>Azure briefing</span>
-        </div>
-      </section>
     </div>
   );
 }

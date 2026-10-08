@@ -506,6 +506,9 @@ export default function App() {
                   onUpdate={
                     updateShipment
                   }
+                  onViewActions={() =>
+                    setTab("Actions")
+                  }
                 />
               )}
 
@@ -519,6 +522,9 @@ export default function App() {
                   }
                   onDecide={
                     decide
+                  }
+                  onViewBriefing={() =>
+                    setTab("Briefings")
                   }
                 />
               )}

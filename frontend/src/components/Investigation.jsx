@@ -95,6 +95,48 @@ function CitationList({
   );
 }
 
+function HistoricalDelayEvidence({
+  summary,
+}) {
+  if (!summary) {
+    return (
+      <p className="muted-text">
+        Historical-delay evidence was not available.
+      </p>
+    );
+  }
+
+  const marker = "Highest factor:";
+  const markerIndex = summary.indexOf(marker);
+
+  if (markerIndex === -1) {
+    return <p>{summary}</p>;
+  }
+
+  const rates = summary
+    .slice(0, markerIndex)
+    .trim();
+
+  const highestFactor = summary
+    .slice(markerIndex + marker.length)
+    .trim();
+
+  return (
+    <>
+      <p>{rates}</p>
+
+      <div className="highest-factor">
+        <span>
+          Highest factor
+        </span>
+
+        <strong>
+          {highestFactor}
+        </strong>
+      </div>
+    </>
+  );
+}
 
 function InvestigationEvidence({
   shipment,
@@ -145,22 +187,12 @@ function InvestigationEvidence({
 
       <div className="evidence-grid">
         <EvidenceCard title="Historical delay">
-          {structured
-            ?.historicalDelaySummary
-            ? (
-              <p>
-                {
-                  structured
-                    .historicalDelaySummary
-                }
-              </p>
-            )
-            : (
-              <p className="muted-text">
-                Historical-delay evidence was not
-                available.
-              </p>
-            )}
+          <HistoricalDelayEvidence
+            summary={
+              structured
+                ?.historicalDelaySummary
+            }
+          />
         </EvidenceCard>
 
         <EvidenceCard title="Destination weather">
@@ -346,6 +378,7 @@ function InvestigationEvidence({
 export default function Investigation({
   shipment,
   onUpdate,
+  onViewActions,
 }) {
   if (!shipment) {
     return (
@@ -486,10 +519,6 @@ export default function Investigation({
     shipment.investigationError
   );
 
-  const limitations = (
-    shipment.limitations
-    || []
-  );
 
   const citations = (
     shipment.citationCards
@@ -682,41 +711,35 @@ export default function Investigation({
           />
         </section>
       )}
-
-      {limitations.length > 0 && (
-        <section className="panel limitations-panel">
-          <div className="section-copy">
+      {shipment.briefing && (
+        <nav
+          className="page-navigation"
+          aria-label="Continue investigation workflow"
+        >
+          <div>
             <small className="eyebrow">
-              Decision boundaries
+              Next step
             </small>
 
-            <h3>
-              Limitations and required validation
-            </h3>
+            <strong>
+              Review recommended actions
+            </strong>
 
             <p>
-              Review these constraints before approving any
-              mitigation action.
+              Evaluate the grounded recommendations and mark
+              suitable actions for operational review.
             </p>
           </div>
 
-          <ul className="limitations-list">
-            {limitations.map(
-              (
-                limitation,
-                index,
-              ) => (
-                <li
-                  key={
-                    `${index}-${limitation}`
-                  }
-                >
-                  {limitation}
-                </li>
-              ),
-            )}
-          </ul>
-        </section>
+          <button
+            type="button"
+            className="btn page-navigation-button"
+            onClick={onViewActions}
+          >
+            View recommended actions
+            <span aria-hidden="true">→</span>
+          </button>
+        </nav>
       )}
     </div>
   );

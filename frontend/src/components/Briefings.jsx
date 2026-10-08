@@ -201,6 +201,48 @@ function buildClipboardText(
   return lines.join("\n");
 }
 
+function HistoricalDelayEvidence({
+  summary,
+}) {
+  if (!summary) {
+    return (
+      <p className="muted-text">
+        Historical-delay evidence was not available.
+      </p>
+    );
+  }
+
+  const marker = "Highest factor:";
+  const markerIndex = summary.indexOf(marker);
+
+  if (markerIndex === -1) {
+    return <p>{summary}</p>;
+  }
+
+  const rates = summary
+    .slice(0, markerIndex)
+    .trim();
+
+  const highestFactor = summary
+    .slice(markerIndex + marker.length)
+    .trim();
+
+  return (
+    <>
+      <p>{rates}</p>
+
+      <div className="highest-factor">
+        <span>
+          Highest factor
+        </span>
+
+        <strong>
+          {highestFactor}
+        </strong>
+      </div>
+    </>
+  );
+}
 
 function EvidenceSection({
   shipment,
@@ -236,22 +278,12 @@ function EvidenceSection({
 
       <div className="evidence-grid">
         <EvidenceCard title="Historical delay">
-          {evidence
-            .historicalDelaySummary
-            ? (
-              <p>
-                {
-                  evidence
-                    .historicalDelaySummary
-                }
-              </p>
-            )
-            : (
-              <p className="muted-text">
-                Historical-delay evidence was not
-                available.
-              </p>
-            )}
+          <HistoricalDelayEvidence
+            summary={
+              evidence
+                .historicalDelaySummary
+            }
+          />
         </EvidenceCard>
 
         <EvidenceCard title="Destination weather">
