@@ -1125,3 +1125,126 @@ select{font:inherit;padding:6px 10px;border-radius:8px;border:1px solid var(--li
     min-width: 0;
   }
 }
+
+/* Inventory evidence */
+
+.inventory-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inventory-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.inventory-heading strong,
+.inventory-heading span {
+  display: block;
+}
+
+.inventory-heading span {
+  margin-top: 3px;
+  color: var(--mute);
+  font-size: 13px;
+}
+
+.inventory-facts {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.inventory-facts > div {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+}
+
+.inventory-facts dt {
+  color: var(--mute);
+  font-size: 12px;
+}
+
+.inventory-facts dd {
+  margin: 2px 0 0;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.inventory-alert {
+  padding: 11px 12px;
+  border-left: 4px solid var(--medium);
+  border-radius: 8px;
+  background:
+    color-mix(
+      in srgb,
+      var(--medium) 10%,
+      transparent
+    );
+}
+
+.inventory-alert.high {
+  border-left-color: var(--high);
+  background:
+    color-mix(
+      in srgb,
+      var(--high) 10%,
+      transparent
+    );
+}
+
+.inventory-alert.low {
+  border-left-color: var(--low);
+  background:
+    color-mix(
+      in srgb,
+      var(--low) 10%,
+      transparent
+    );
+}
+
+.inventory-alert p {
+  margin: 0;
+}
+
+.inventory-alert p + p {
+  margin-top: 5px;
+}
+
+.inventory-disclosure {
+  margin: 0 !important;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background:
+    color-mix(
+      in srgb,
+      var(--medium) 10%,
+      transparent
+    );
+  color: var(--mute);
+  font-size: 13px;
+}
+
+.inventory-evidence.compact
+.inventory-facts {
+  grid-template-columns:
+    repeat(auto-fit, minmax(130px, 1fr));
+}
+
+@media (max-width: 580px) {
+  .inventory-heading {
+    flex-direction: column;
+  }
+
+  .inventory-facts {
+    grid-template-columns: 1fr;
+  }
+}

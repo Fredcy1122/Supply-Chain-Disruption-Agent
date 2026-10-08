@@ -327,6 +327,141 @@ function validateDonePayload(
   }
 }
 
+const toInventoryStatus = (
+  value,
+) => {
+  if (!isObject(value)) {
+    return null;
+  }
+
+  return {
+    inventoryId:
+      value.inventory_id
+      ?? null,
+
+    productId:
+      value.product_id
+      ?? null,
+
+    productName:
+      value.product_name
+      ?? null,
+
+    category:
+      value.category
+      ?? null,
+
+    department:
+      value.department
+      ?? null,
+
+    warehouseId:
+      value.warehouse_id
+      ?? null,
+
+    warehouseLocation:
+      value.warehouse_location
+      ?? null,
+
+    warehouseCountry:
+      value.warehouse_country
+      ?? null,
+
+    supplierId:
+      value.supplier_id
+      ?? null,
+
+    currentStock:
+      value.current_stock
+      ?? null,
+
+    reservedStock:
+      value.reserved_stock
+      ?? null,
+
+    availableStock:
+      value.available_stock
+      ?? null,
+
+    dailyDemand:
+      value.daily_demand
+      ?? null,
+
+    safetyStock:
+      value.safety_stock
+      ?? null,
+
+    reorderPoint:
+      value.reorder_point
+      ?? null,
+
+    incomingQuantity:
+      value.incoming_quantity
+      ?? null,
+
+    expectedReplenishmentDate:
+      value.expected_replenishment_date
+      ?? null,
+
+    inventoryCoverageDays:
+      value.inventory_coverage_days
+      ?? null,
+
+    stockoutRisk:
+      value.stockout_risk
+      ?? null,
+
+    belowSafetyStock:
+      value.below_safety_stock
+      ?? false,
+
+    belowReorderPoint:
+      value.below_reorder_point
+      ?? false,
+
+    calculationVerified:
+      value.calculation_verified
+      ?? false,
+
+    destinationCountry:
+      value.destination_country
+      ?? null,
+
+    destinationCountryMatch:
+      value.destination_country_match
+      ?? false,
+
+    dataSource:
+      value.data_source
+      ?? null,
+
+    limitation:
+      value.limitation
+      ?? null,
+  };
+};
+
+
+const formatDays = (
+  value,
+) => {
+  const numberValue = Number(
+    value,
+  );
+
+  if (!Number.isFinite(
+    numberValue,
+  )) {
+    return NA;
+  }
+
+  return `${numberValue.toLocaleString(
+    undefined,
+    {
+      maximumFractionDigits: 2,
+    },
+  )} days`;
+};
 
 function toResult(
   briefing,
@@ -338,6 +473,13 @@ function toResult(
   const toolTrace = (
     briefing.tool_trace
       .map(toEvidence)
+  );
+
+  const inventoryStatus = (
+    toInventoryStatus(
+      briefing.evidence
+        .inventory_status,
+    )
   );
 
   const structuredEvidence = {
@@ -361,10 +503,21 @@ function toResult(
         .supplier_status
       ?? null,
 
-    inventoryCoverageDays:
+    inventorySummary:
       briefing.evidence
-        .inventory_coverage_days
+        .inventory_summary
       ?? null,
+
+    inventoryStatus,
+
+    inventoryCoverageDays:
+      (
+        inventoryStatus
+          ?.inventoryCoverageDays
+        ?? briefing.evidence
+          .inventory_coverage_days
+        ?? null
+      ),
   };
 
   const cause = [
@@ -376,6 +529,9 @@ function toResult(
 
     structuredEvidence
       .supplierStatus,
+
+    structuredEvidence
+      .inventorySummary,
   ]
     .filter(Boolean)
     .join(" ");
@@ -419,19 +575,37 @@ function toResult(
   );
 
   const inventoryImpact = (
-    structuredEvidence
-      .inventoryCoverageDays
-    !== null
+    inventoryStatus
   )
     ? (
-      "Inventory coverage is "
-      + `${structuredEvidence
-        .inventoryCoverageDays} days.`
+      `${formatDays(
+        inventoryStatus
+          .inventoryCoverageDays,
+      )} of inventory coverage`
+      + ` · ${capitalize(
+        inventoryStatus
+          .stockoutRisk,
+      )} stockout risk`
+      + ` · ${inventoryStatus
+        .availableStock} units available.`
     )
     : (
-      "Inventory impact cannot be "
-      + "confirmed because inventory "
-      + "coverage is unavailable."
+      structuredEvidence
+        .inventoryCoverageDays
+      !== null
+        ? (
+          "Inventory coverage is "
+          + formatDays(
+            structuredEvidence
+              .inventoryCoverageDays,
+          )
+          + "."
+        )
+        : (
+          "Inventory impact cannot be "
+          + "confirmed because inventory "
+          + "coverage is unavailable."
+        )
     );
 
   return {
@@ -929,6 +1103,30 @@ const supplierFinding = (
   );
 };
 
+const inventoryFinding = (
+  output,
+) => {
+  if (!isObject(output)) {
+    return null;
+  }
+
+  const coverage = Number(
+    output.inventory_coverage_days,
+  );
+
+  const risk = capitalize(
+    output.stockout_risk,
+  );
+
+  if (!Number.isFinite(coverage)) {
+    return null;
+  }
+
+  return (
+    `${formatDays(coverage)} coverage`
+    + ` · ${risk} stockout risk`
+  );
+};
 
 const STEPS = {
   get_delay_risk: {
@@ -1004,6 +1202,13 @@ const STEPS = {
 
     finding:
       supplierFinding,
+  },
+  get_inventory_coverage: {
+    label:
+      "Checking inventory coverage",
+
+    finding:
+      inventoryFinding,
   },
 };
 

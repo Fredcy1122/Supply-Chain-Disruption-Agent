@@ -84,6 +84,86 @@ const SUPPLIER_RESULT = {
     "Synthetic supplier data requires human validation.",
 };
 
+const INVENTORY_RESULT = {
+  inventory_id:
+    "INV-TEST",
+
+  product_id:
+    "PROD-TEST",
+
+  product_name:
+    "Trail Running Shoe",
+
+  category:
+    "Cleats",
+
+  department:
+    "Footwear",
+
+  warehouse_id:
+    "WH-TEST",
+
+  warehouse_location:
+    "Sao Paulo",
+
+  warehouse_country:
+    "Brazil",
+
+  supplier_id:
+    "SUP-TEST",
+
+  current_stock:
+    400,
+
+  reserved_stock:
+    100,
+
+  available_stock:
+    300,
+
+  daily_demand:
+    50,
+
+  safety_stock:
+    200,
+
+  reorder_point:
+    450,
+
+  incoming_quantity:
+    200,
+
+  expected_replenishment_date:
+    "2017-05-08",
+
+  inventory_coverage_days:
+    6,
+
+  stockout_risk:
+    "MEDIUM",
+
+  below_safety_stock:
+    false,
+
+  below_reorder_point:
+    true,
+
+  calculation_verified:
+    true,
+
+  destination_country:
+    "Brasil",
+
+  destination_country_match:
+    true,
+
+  data_source:
+    "SYNTHETIC_MVP",
+
+  limitation:
+    "Synthetic inventory evidence requires human validation.",
+};
+
 
 const BRIEFING = {
   shipment_id:
@@ -111,8 +191,16 @@ const BRIEFING = {
       + "(NorthStar Logistics), located in Bután; "
       + "supplier risk MEDIUM.",
 
+    inventory_summary:
+      "Synthetic inventory evidence indicates "
+      + "6 days of coverage and MEDIUM "
+      + "stockout risk.",
+
+    inventory_status:
+      INVENTORY_RESULT,
+
     inventory_coverage_days:
-      null,
+      6,
   },
 
   rag_policy_citations: [
@@ -211,12 +299,36 @@ const BRIEFING = {
       error:
         null,
     },
+    {
+      tool:
+        "get_inventory_coverage",
+
+      input: {
+        shipment_id:
+          "SHP-1",
+
+        product_name:
+          "Trail Running Shoe",
+
+        destination_country:
+          "Brasil",
+      },
+
+      output:
+        INVENTORY_RESULT,
+
+      status:
+        "success",
+
+      error:
+        null,
+    },
   ],
 
   limitations: [
     "Weather evidence represents destination-level conditions.",
     "Supplier records are synthetic demonstration data.",
-    "Inventory coverage was not collected.",
+    "Inventory records are synthetic demonstration data.",
   ],
 };
 
@@ -347,6 +459,53 @@ const SUCCESS = [
 
       output:
         SUPPLIER_RESULT,
+
+      status:
+        "success",
+
+      error:
+        null,
+    },
+  ),
+
+    sse(
+    "tool_start",
+    {
+      name:
+        "get_inventory_coverage",
+
+      input: {
+        shipment_id:
+          "SHP-1",
+
+        product_name:
+          "Trail Running Shoe",
+
+        destination_country:
+          "Brasil",
+      },
+    },
+  ),
+
+  sse(
+    "tool_complete",
+    {
+      name:
+        "get_inventory_coverage",
+
+      input: {
+        shipment_id:
+          "SHP-1",
+
+        product_name:
+          "Trail Running Shoe",
+
+        destination_country:
+          "Brasil",
+      },
+
+      output:
+        INVENTORY_RESULT,
 
       status:
         "success",
@@ -637,7 +796,7 @@ test(
     );
 
     assert.equal(
-      updates[6]
+      updates[8]
         .investigationStatus,
       "generating_briefing",
     );
@@ -708,7 +867,28 @@ test(
     assert.equal(
       result.structuredEvidence
         .inventoryCoverageDays,
-      null,
+      6,
+    );
+
+    assert.equal(
+      result.structuredEvidence
+        .inventoryStatus
+        .availableStock,
+      300,
+    );
+
+    assert.equal(
+      result.structuredEvidence
+        .inventoryStatus
+        .stockoutRisk,
+      "MEDIUM",
+    );
+
+    assert.equal(
+      result.structuredEvidence
+        .inventoryStatus
+        .belowReorderPoint,
+      true,
     );
   },
 );
@@ -829,7 +1009,7 @@ test(
 
 
 test(
-  "inventory impact is not invented when coverage is unavailable",
+  "inventory impact uses structured inventory evidence",
   async () => {
     const {
       result,
@@ -839,12 +1019,17 @@ test(
 
     assert.match(
       result.briefing.impact,
-      /cannot be confirmed/i,
+      /6 days of inventory coverage/i,
     );
 
     assert.match(
       result.briefing.impact,
-      /coverage is unavailable/i,
+      /medium stockout risk/i,
+    );
+
+    assert.match(
+      result.briefing.impact,
+      /300 units available/i,
     );
   },
 );
@@ -973,6 +1158,8 @@ const OUTPUTS = {
 
   find_alternative_supplier:
     SUPPLIER_RESULT,
+  get_inventory_coverage:
+    INVENTORY_RESULT,
 };
 
 
@@ -1004,10 +1191,21 @@ const evidenceFor = (
           limit:
             3,
         }
-        : {
-          shipment_id:
-            "SHP-1",
-        },
+        : tool === "get_inventory_coverage"
+          ? {
+            shipment_id:
+              "SHP-1",
+
+            product_name:
+              "Trail Running Shoe",
+
+            destination_country:
+              "Brasil",
+          }
+          : {
+            shipment_id:
+              "SHP-1",
+          },
 
     output:
       OUTPUTS[tool],
@@ -1145,6 +1343,22 @@ test(
             (
               "NorthStar Logistics "
               + "· Bután · Medium risk"
+            ),
+
+          status:
+            "done",
+        },
+        {
+          tool:
+            "get_inventory_coverage",
+
+          label:
+            "Checking inventory coverage",
+
+          finding:
+            (
+              "6 days coverage "
+              + "· Medium stockout risk"
             ),
 
           status:

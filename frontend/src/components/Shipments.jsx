@@ -118,6 +118,10 @@ function BusinessImpact({
     shipment.structuredEvidence
       ?.inventoryCoverageDays
   );
+  const inventoryStatus = (
+    shipment.structuredEvidence
+      ?.inventoryStatus
+  );
 
   return (
     <section className="shipment-section">
@@ -131,23 +135,30 @@ function BusinessImpact({
         </h3>
 
         <p>
-          Impact values remain unavailable until connected
-          inventory and order-impact sources provide
-          evidence.
+          Inventory impact appears after an investigation
+          collects structured Inventory Tool evidence.
         </p>
       </div>
 
       <div className="stats small">
         <div className="stat">
           <b>
-            {
-              impact.affectedOrders
-              ?? NA
-            }
+            {inventoryStatus
+              ?.availableStock
+              !== null
+              && inventoryStatus
+                ?.availableStock
+                !== undefined
+              ? (
+                inventoryStatus
+                  .availableStock
+                  .toLocaleString()
+              )
+              : NA}
           </b>
 
           <span>
-            Orders affected
+            Available units
           </span>
         </div>
 
@@ -166,13 +177,17 @@ function BusinessImpact({
 
         <div className="stat">
           <b>
-            {money(
-              impact.cost,
-            )}
+            {inventoryStatus
+              ?.stockoutRisk
+              ? String(
+                inventoryStatus
+                  .stockoutRisk,
+              ).toUpperCase()
+              : NA}
           </b>
 
           <span>
-            Value at risk
+            Stockout risk
           </span>
         </div>
       </div>

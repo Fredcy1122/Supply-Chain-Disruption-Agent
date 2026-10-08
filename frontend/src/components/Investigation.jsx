@@ -4,6 +4,8 @@ import {
   toSteps,
 } from "../api/investigation.js";
 
+import InventoryEvidence from "./InventoryEvidence.jsx";
+
 import {
   Empty,
   EvidenceCard,
@@ -166,6 +168,11 @@ function InvestigationEvidence({
   const inventoryCoverage = (
     structured
       ?.inventoryCoverageDays
+  );
+
+  const inventoryStatus = (
+    structured
+      ?.inventoryStatus
   );
 
   return (
@@ -346,28 +353,14 @@ function InvestigationEvidence({
               )}
         </EvidenceCard>
 
-        <EvidenceCard title="Inventory coverage">
-          {inventoryCoverage !== null
-            && inventoryCoverage !== undefined
-            ? (
-              <>
-                <strong className="evidence-value">
-                  {inventoryCoverage} days
-                </strong>
-
-                <p>
-                  Compare available coverage with the
-                  expected disruption duration.
-                </p>
-              </>
-            )
-            : (
-              <p className="muted-text">
-                Inventory coverage is unavailable. The
-                investigation cannot confirm stockout
-                exposure.
-              </p>
-            )}
+        <EvidenceCard
+          title="Inventory impact"
+          tone="synthetic"
+        >
+          <InventoryEvidence
+            inventory={inventoryStatus}
+            coverage={inventoryCoverage}
+          />
         </EvidenceCard>
       </div>
     </section>
@@ -596,8 +589,8 @@ export default function Investigation({
                   )
                   : (
                     "The agent is gathering shipment, "
-                    + "history, weather, and supplier "
-                    + "evidence."
+                    + "history, weather, supplier and"
+                    + "inventory evidence."
                   )}
               </p>
             </div>

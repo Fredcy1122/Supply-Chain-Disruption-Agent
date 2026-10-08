@@ -3,6 +3,7 @@ import {
   useState,
 } from "react";
 
+import InventoryEvidence from "./InventoryEvidence.jsx";
 import {
   Empty,
   EvidenceCard,
@@ -42,21 +43,25 @@ function evidenceText(
     ],
 
     [
-      "Inventory coverage",
+      "Inventory",
       structuredEvidence
-        .inventoryCoverageDays
-      !== null
-      && structuredEvidence
-        .inventoryCoverageDays
-      !== undefined
-        ? (
-          `${structuredEvidence
-            .inventoryCoverageDays} days`
-        )
-        : (
-          "Not available. Stockout exposure "
-          + "cannot be confirmed."
-        ),
+        .inventorySummary
+      || (
+        structuredEvidence
+          .inventoryCoverageDays
+        !== null
+        && structuredEvidence
+          .inventoryCoverageDays
+        !== undefined
+          ? (
+            `${structuredEvidence
+              .inventoryCoverageDays} days coverage`
+          )
+          : (
+            "Not available. Stockout exposure "
+            + "cannot be confirmed."
+          )
+      ),
     ],
   ].filter(
     (
@@ -258,6 +263,9 @@ function EvidenceSection({
   const inventoryCoverage = (
     evidence.inventoryCoverageDays
   );
+  const inventoryStatus = (
+    evidence.inventoryStatus
+  );
 
   return (
     <section className="briefing-section">
@@ -331,27 +339,15 @@ function EvidenceSection({
             )}
         </EvidenceCard>
 
-        <EvidenceCard title="Inventory coverage">
-          {inventoryCoverage !== null
-            && inventoryCoverage !== undefined
-            ? (
-              <>
-                <strong className="evidence-value">
-                  {inventoryCoverage} days
-                </strong>
-
-                <p>
-                  Compare available inventory coverage
-                  with the expected disruption duration.
-                </p>
-              </>
-            )
-            : (
-              <p className="muted-text">
-                Inventory coverage is unavailable. The
-                briefing does not assume a stockout impact.
-              </p>
-            )}
+        <EvidenceCard
+          title="Inventory impact"
+          tone="synthetic"
+        >
+          <InventoryEvidence
+            inventory={inventoryStatus}
+            coverage={inventoryCoverage}
+            compact
+          />
         </EvidenceCard>
       </div>
     </section>
