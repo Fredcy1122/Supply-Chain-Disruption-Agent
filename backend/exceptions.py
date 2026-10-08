@@ -36,3 +36,15 @@ class AzureOpenAIServiceError(BackendServiceError):
     """
     Raised when Azure OpenAI briefing generation cannot be completed.
     """
+
+class InventoryServiceError(BackendServiceError):
+    """
+    Raised when inventory data cannot be loaded, validated,
+    or interpreted.
+    """
+
+
+class InventoryNotFoundError(InventoryServiceError):
+    """
+    Raised when no exact inventory record exists for a product.
+    """

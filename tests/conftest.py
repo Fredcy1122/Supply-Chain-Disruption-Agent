@@ -1,7 +1,7 @@
-import pandas as pd
-import pytest
 from types import SimpleNamespace
 
+import pandas as pd
+import pytest
 import requests
 
 from backend.models.schemas import (
@@ -24,7 +24,9 @@ WEATHER_EVIDENCE = {
     "longitude": -43.6625,
     "window_start": "2017-05-01",
     "window_end": "2017-05-05",
-    "window_basis": agent_tools.WEATHER_WINDOW_BASIS,
+    "window_basis": (
+        agent_tools.WEATHER_WINDOW_BASIS
+    ),
     "daily": [],
     "precipitation_total_mm": 9.2,
     "precipitation_max_mm": 8.9,
@@ -72,9 +74,16 @@ def no_live_weather(monkeypatch):
     HTTP calls fail unless a test replaces the mock. Cached weather
     lookups are cleared before and after each test. Agent investigations
     receive fixed weather evidence unless a test explicitly replaces it.
+
+    Only the requests reference inside weather_service is replaced.
+    The shared requests package remains available to RAG, tiktoken,
+    Azure OpenAI, and other integrations.
     """
 
-    def network_blocked(*args, **kwargs):
+    def network_blocked(
+        *args,
+        **kwargs,
+    ):
         raise AssertionError(
             "Tests must not call the live weather API."
         )
@@ -110,19 +119,26 @@ def no_live_weather(monkeypatch):
 
 
 @pytest.fixture
-def mock_azure_briefing(monkeypatch):
+def mock_azure_briefing(
+    monkeypatch,
+):
     """
-    Replace Azure OpenAI synthesis with deterministic content.
+    Replace RAG retrieval and Azure OpenAI synthesis with deterministic
+    offline content.
 
     Agent, API, and streaming unit tests use this fixture so they do
     not consume Azure tokens or depend on network availability. Real
-    Azure behavior is tested separately by integration tests.
+    RAG and Azure behavior are tested separately by integration tests.
     """
     retrieved_documents = [
         {
             "rank": 1,
-            "source": "01_shipment_delay_escalation.pdf",
-            "source_path": "01_shipment_delay_escalation.pdf",
+            "source": (
+                "01_shipment_delay_escalation.pdf"
+            ),
+            "source_path": (
+                "01_shipment_delay_escalation.pdf"
+            ),
             "relevance_score": 0.91,
             "content": (
                 "Elevated-risk shipments require investigation "
@@ -134,8 +150,12 @@ def mock_azure_briefing(monkeypatch):
         },
         {
             "rank": 2,
-            "source": "02_weather_disruption_sop.pdf",
-            "source_path": "02_weather_disruption_sop.pdf",
+            "source": (
+                "02_weather_disruption_sop.pdf"
+            ),
+            "source_path": (
+                "02_weather_disruption_sop.pdf"
+            ),
             "relevance_score": 0.84,
             "content": (
                 "Low-severity weather does not independently "
@@ -147,8 +167,12 @@ def mock_azure_briefing(monkeypatch):
         },
         {
             "rank": 3,
-            "source": "03_supplier_alternative_policy.pdf",
-            "source_path": "03_supplier_alternative_policy.pdf",
+            "source": (
+                "03_supplier_alternative_policy.pdf"
+            ),
+            "source_path": (
+                "03_supplier_alternative_policy.pdf"
+            ),
             "relevance_score": 0.80,
             "content": (
                 "Synthetic alternative suppliers require geographic, "
@@ -163,7 +187,9 @@ def mock_azure_briefing(monkeypatch):
     monkeypatch.setattr(
         briefing_service,
         "retrieve_operational_knowledge",
-        lambda query, k=5: retrieved_documents[:k],
+        lambda query, k=5: (
+            retrieved_documents[:k]
+        ),
     )
 
     def deterministic_azure_briefing(
@@ -219,10 +245,26 @@ def mock_azure_briefing(monkeypatch):
                 "Supplier availability has not yet been assessed."
             )
 
-        if evidence.inventory_coverage_days is not None:
+        if evidence.inventory_summary:
+            summary_parts.append(
+                evidence.inventory_summary
+            )
+
+            risk_factors.append(
+                evidence.inventory_summary
+            )
+        elif (
+            evidence.inventory_coverage_days
+            is not None
+        ):
+            coverage_text = format(
+                evidence.inventory_coverage_days,
+                "g",
+            )
+
             summary_parts.append(
                 "Available inventory coverage is "
-                f"{evidence.inventory_coverage_days} days."
+                f"{coverage_text} days."
             )
         else:
             summary_parts.append(
@@ -273,7 +315,10 @@ def mock_azure_briefing(monkeypatch):
                 for term in low_weather_terms
             )
 
-            if severe_weather and not low_weather:
+            if (
+                severe_weather
+                and not low_weather
+            ):
                 recommended_actions.append(
                     "Evaluate transport alternatives because the "
                     "collected weather evidence indicates potentially "
@@ -303,12 +348,57 @@ def mock_azure_briefing(monkeypatch):
                 "evidence before recommending an alternative."
             )
 
-        if evidence.inventory_coverage_days is None:
+        inventory_status = (
+            evidence.inventory_status
+        )
+
+        if inventory_status is not None:
+            if (
+                inventory_status.stockout_risk
+                == RiskLevel.HIGH
+            ):
+                recommended_actions.append(
+                    "Escalate the synthetic inventory exposure for "
+                    "human operational review because available stock "
+                    "is at or below safety stock."
+                )
+            elif (
+                inventory_status.stockout_risk
+                == RiskLevel.MEDIUM
+            ):
+                recommended_actions.append(
+                    "Review replenishment timing because inventory "
+                    "coverage is limited or available stock is below "
+                    "the reorder point."
+                )
+            else:
+                recommended_actions.append(
+                    "Continue monitoring inventory coverage because "
+                    "the synthetic record is currently classified as "
+                    "low stockout risk."
+                )
+
+            if (
+                inventory_status.incoming_quantity
+                > 0
+            ):
+                recommended_actions.append(
+                    "Confirm the recorded incoming quantity and "
+                    "replenishment date before relying on incoming "
+                    "inventory as mitigation."
+                )
+        elif (
+            evidence.inventory_coverage_days
+            is None
+        ):
             recommended_actions.append(
                 "Obtain inventory coverage before determining "
                 "stockout exposure."
             )
-        elif evidence.inventory_coverage_days <= 3:
+        elif (
+            evidence.inventory_coverage_days
+            <= 3
+        ):
             recommended_actions.append(
                 "Escalate potential stockout exposure because "
                 "inventory coverage is three days or less."
@@ -320,9 +410,13 @@ def mock_azure_briefing(monkeypatch):
             )
 
         return LLMBriefingContent(
-            summary=" ".join(summary_parts),
+            summary=" ".join(
+                summary_parts
+            ),
             risk_factors=risk_factors,
-            recommended_actions=recommended_actions,
+            recommended_actions=(
+                recommended_actions
+            ),
         )
 
     monkeypatch.setattr(
@@ -333,12 +427,16 @@ def mock_azure_briefing(monkeypatch):
 
 
 @pytest.fixture
-def shipment_data(monkeypatch):
+def shipment_data(
+    monkeypatch,
+):
     """
     Replace the Shipment Tool dataset with one known record.
     """
     dataframe = pd.DataFrame(
-        [SHIPMENT_RECORD]
+        [
+            SHIPMENT_RECORD,
+        ]
     )
 
     monkeypatch.setattr(
@@ -351,12 +449,17 @@ def shipment_data(monkeypatch):
 
 
 @pytest.fixture
-def shipment(shipment_data):
+def shipment(
+    shipment_data,
+):
     """
     Return the known leakage-safe shipment record.
     """
-    return shipment_service.get_shipment_by_id(
-        "SHP-153440"
+    return (
+        shipment_service
+        .get_shipment_by_id(
+            "SHP-153440"
+        )
     )
 
 
@@ -372,7 +475,9 @@ def make_prediction(
         shipment_id="SHP-153440",
         delay_probability=probability,
         risk_level=risk_level,
-        requires_investigation=requires_investigation,
+        requires_investigation=(
+            requires_investigation
+        ),
     )
 
 

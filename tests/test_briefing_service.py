@@ -335,7 +335,7 @@ def test_summary_includes_collected_evidence(
 
     assert (
         "Available inventory coverage is "
-        "12 days."
+        "12.0 days."
         in briefing.summary
     )
 

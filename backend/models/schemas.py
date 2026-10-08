@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -334,6 +334,176 @@ class SupplierRecommendation(BaseModel):
         "Recommendations require human validation before use."
     )
 
+# ============================================================
+# INVENTORY SCHEMAS
+# ============================================================
+
+
+class InventoryStatusResponse(BaseModel):
+    """
+    Synthetic operational inventory evidence for one shipment product.
+
+    Inventory quantities represent demonstration data and must not be
+    interpreted as live warehouse stock.
+    """
+
+    inventory_id: str = Field(
+        ...,
+        description="Synthetic inventory-record identifier",
+    )
+
+    product_id: str = Field(
+        ...,
+        description="Synthetic product identifier in the inventory dataset",
+    )
+
+    product_name: str = Field(
+        ...,
+        description="Product associated with the inventory record",
+    )
+
+    category: str = Field(
+        ...,
+        description="Product category",
+    )
+
+    department: str = Field(
+        ...,
+        description="Product department",
+    )
+
+    warehouse_id: str = Field(
+        ...,
+        description="Synthetic warehouse identifier",
+    )
+
+    warehouse_location: str = Field(
+        ...,
+        description="Synthetic warehouse location",
+    )
+
+    warehouse_country: str = Field(
+        ...,
+        description="Country associated with the warehouse",
+    )
+
+    supplier_id: str = Field(
+        ...,
+        description="Synthetic supplier identifier",
+    )
+
+    current_stock: int = Field(
+        ...,
+        ge=0,
+        description="Total recorded stock before reservations",
+    )
+
+    reserved_stock: int = Field(
+        ...,
+        ge=0,
+        description="Stock already reserved for other demand",
+    )
+
+    available_stock: int = Field(
+        ...,
+        ge=0,
+        description="Stock available after reservations",
+    )
+
+    daily_demand: int = Field(
+        ...,
+        gt=0,
+        description="Synthetic average daily demand in units",
+    )
+
+    safety_stock: int = Field(
+        ...,
+        ge=0,
+        description="Synthetic safety-stock threshold",
+    )
+
+    reorder_point: int = Field(
+        ...,
+        ge=0,
+        description="Synthetic inventory reorder point",
+    )
+
+    incoming_quantity: int = Field(
+        ...,
+        ge=0,
+        description="Quantity recorded as incoming replenishment",
+    )
+
+    expected_replenishment_date: Optional[
+        date
+    ] = Field(
+        default=None,
+        description=(
+            "Expected replenishment date when one is recorded"
+        ),
+    )
+
+    inventory_coverage_days: float = Field(
+        ...,
+        ge=0,
+        description=(
+            "Available stock divided by average daily demand"
+        ),
+    )
+
+    stockout_risk: RiskLevel = Field(
+        ...,
+        description=(
+            "Inventory stockout-risk classification"
+        ),
+    )
+
+    below_safety_stock: bool = Field(
+        ...,
+        description=(
+            "Whether available stock is at or below safety stock"
+        ),
+    )
+
+    below_reorder_point: bool = Field(
+        ...,
+        description=(
+            "Whether available stock is at or below the reorder point"
+        ),
+    )
+
+    calculation_verified: bool = Field(
+        ...,
+        description=(
+            "Whether independently calculated stock and coverage "
+            "match the source record"
+        ),
+    )
+
+    destination_country: str = Field(
+        ...,
+        description="Shipment destination country used for comparison",
+    )
+
+    destination_country_match: bool = Field(
+        ...,
+        description=(
+            "Whether the warehouse country matches the normalized "
+            "shipment destination country"
+        ),
+    )
+
+    data_source: str = Field(
+        ...,
+        description="Source label for the inventory record",
+    )
+
+    limitation: str = Field(
+        ...,
+        description=(
+            "Synthetic-data and operational-validation limitations"
+        ),
+    )
 
 # ============================================================
 # AGENT EVIDENCE AND BRIEFING SCHEMAS
@@ -364,7 +534,21 @@ class ToolEvidence(BaseModel):
         description="Evidence returned by the Supplier Tool",
     )
 
-    inventory_coverage_days: Optional[int] = Field(
+    inventory_summary: Optional[str] = Field(
+        default=None,
+        description="Evidence returned by the Inventory Tool",
+    )
+
+    inventory_status: Optional[
+        InventoryStatusResponse
+    ] = Field(
+        default=None,
+        description=(
+            "Structured inventory evidence returned by the Inventory Tool"
+        ),
+    )
+
+    inventory_coverage_days: Optional[float] = Field(
         default=None,
         ge=0,
         description="Available inventory coverage measured in days",
