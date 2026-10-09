@@ -31,7 +31,10 @@ class Settings(BaseSettings):
     # FRONTEND
     # ========================================================
 
-    frontend_url: str = "http://localhost:3000"
+    frontend_url: str = (
+        "http://localhost:3000,"
+        "http://localhost:5173"
+    )
 
     # ========================================================
     # SHIPMENT TOOL

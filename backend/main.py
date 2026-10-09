@@ -10,6 +10,29 @@ from backend.api import (
     routes_predictions,
     routes_shipments,
 )
+from backend.config import settings
+
+
+def get_allowed_origins() -> list:
+    """
+    Return configured frontend origins.
+
+    FRONTEND_URL may contain one origin or a comma-separated list.
+    This supports local development and the deployed frontend
+    without allowing arbitrary origins.
+    """
+    origins = [
+        origin.strip().rstrip("/")
+        for origin in settings.frontend_url.split(",")
+        if origin.strip()
+    ]
+
+    if not origins:
+        raise RuntimeError(
+            "FRONTEND_URL must contain at least one allowed origin."
+        )
+
+    return origins
 
 
 app = FastAPI(
@@ -26,10 +49,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5173",
-    ],
+    allow_origins=get_allowed_origins(),
     allow_credentials=True,
     allow_methods=[
         "*",

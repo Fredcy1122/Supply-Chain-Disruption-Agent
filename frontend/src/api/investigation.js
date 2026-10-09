@@ -1,6 +1,10 @@
 // Consumes the backend investigation stream and converts its events
 // into the frontend shipment fields used by React components.
 
+import {
+  apiUrl,
+} from "./base.js";
+
 const NA = "Not available";
 const FAILED = "Investigation failed";
 
@@ -780,10 +784,12 @@ export async function investigate(
 
   try {
     response = await fetchFn(
-      (
-        "/api/agent/investigate/"
-        + `${encodeURIComponent(id)}`
-        + "/stream"
+      apiUrl(
+        (
+          "/api/agent/investigate/"
+          + `${encodeURIComponent(id)}`
+          + "/stream"
+        ),
       ),
       {
         method:

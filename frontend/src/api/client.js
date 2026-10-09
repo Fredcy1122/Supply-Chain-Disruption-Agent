@@ -5,6 +5,9 @@ import {
   ApiError,
 } from "./investigation.js";
 
+import {
+  apiUrl,
+} from "./base.js";
 
 const NA = "Not available";
 
@@ -30,7 +33,9 @@ async function request(
 
   try {
     response = await fetch(
-      path,
+      apiUrl(
+        path,
+      ),
       {
         method,
         headers: {
