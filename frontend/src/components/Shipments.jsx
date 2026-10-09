@@ -473,7 +473,7 @@ export default function Shipments({
               </small>
 
               <h3>
-                Synthetic supplier candidate
+                Alternative supplier candidate
               </h3>
             </div>
 
@@ -487,7 +487,7 @@ export default function Shipments({
               </p>
 
               <small>
-                Demonstration data only. Human validation is
+                Human validation is
                 required before changing suppliers.
               </small>
             </div>

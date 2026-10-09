@@ -326,7 +326,7 @@ function EvidenceSection({
                 </p>
 
                 <p className="disclosure">
-                  Synthetic demonstration data. Human
+                  Human
                   validation is required before changing
                   suppliers.
                 </p>
@@ -421,7 +421,7 @@ function OperationalGuidance({
               {
                 citation.sourceType
                 || (
-                  "Synthetic operational "
+                  "Operational "
                   + "guidance"
                 )
               }
@@ -684,7 +684,7 @@ export default function Briefings({
           </h3>
 
           <p>
-            These synthetic documents were retrieved from
+            These documents were retrieved from
             the operational knowledge base and supplied as
             grounding context.
           </p>

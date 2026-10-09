@@ -231,7 +231,7 @@ export default function InventoryEvidence({
       )}
 
       <p className="inventory-disclosure">
-        Synthetic inventory evidence. Live warehouse
+        Warehouse
         quantities, reservations, replenishment timing,
         and transfer feasibility require operational
         validation.

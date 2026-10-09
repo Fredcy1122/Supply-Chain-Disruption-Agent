@@ -332,6 +332,21 @@ const BRIEFING = {
   ],
 };
 
+const VISIBLE_BRIEFING_SUMMARY = (
+  "Shipment SHP-1 has a medium predicted delay risk. "
+  + "Historical delay rates are elevated, while destination "
+  + "weather is low severity. The supplier candidate "
+  + "requires human validation."
+);
+
+
+
+const VISIBLE_RECOMMENDED_ACTIONS = [
+  "Continue active shipment monitoring.",
+  "Do not reroute solely on low-severity weather evidence.",
+  "Validate the supplier before considering a change.",
+  "Obtain inventory coverage.",
+];
 
 const SUCCESS = [
   sse(
@@ -840,7 +855,7 @@ test(
 
     assert.equal(
       result.briefing.summary,
-      BRIEFING.summary,
+      VISIBLE_BRIEFING_SUMMARY,
     );
 
     assert.equal(
@@ -890,6 +905,12 @@ test(
         .belowReorderPoint,
       true,
     );
+    assert.equal(
+      result.structuredEvidence
+        .inventoryStatus
+        .incomingQuantity,
+      200,
+    );
   },
 );
 
@@ -930,7 +951,7 @@ test(
         ) =>
           citation.sourceType
           === (
-            "Synthetic operational "
+            "Operational "
             + "guidance"
           ),
       ),
@@ -955,8 +976,7 @@ test(
 
     assert.deepEqual(
       result.recommendedActions,
-      BRIEFING
-        .recommended_actions,
+      VISIBLE_RECOMMENDED_ACTIONS,
     );
 
     assert.deepEqual(
@@ -966,8 +986,7 @@ test(
         ) =>
           recommendation.title,
       ),
-      BRIEFING
-        .recommended_actions,
+      VISIBLE_RECOMMENDED_ACTIONS,
     );
 
     assert.ok(
@@ -987,7 +1006,7 @@ test(
 
 
 test(
-  "done preserves limitations",
+  "done exposes user-facing operational limitations",
   async () => {
     const {
       result,
@@ -995,14 +1014,33 @@ test(
       SUCCESS,
     );
 
-    assert.deepEqual(
-      result.limitations,
-      BRIEFING.limitations,
+    assert.ok(
+      result.limitations.length > 0,
+    );
+
+    assert.ok(
+      result.limitations.every(
+        (limitation) => (
+          !/synthetic/i.test(
+            limitation,
+          )
+        ),
+      ),
     );
 
     assert.deepEqual(
       result.briefing.limitations,
-      BRIEFING.limitations,
+      result.limitations,
+    );
+
+    assert.ok(
+      result.rawBriefing.limitations.some(
+        (limitation) => (
+          /synthetic/i.test(
+            limitation,
+          )
+        ),
+      ),
     );
   },
 );
@@ -1068,7 +1106,7 @@ test(
 
     assert.equal(
       result.briefing.summary,
-      BRIEFING.summary,
+      VISIBLE_BRIEFING_SUMMARY,
     );
   },
 );
@@ -1097,7 +1135,7 @@ test(
 
     assert.equal(
       result.briefing.summary,
-      BRIEFING.summary,
+      VISIBLE_BRIEFING_SUMMARY,
     );
   },
 );

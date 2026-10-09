@@ -261,6 +261,48 @@ const citationTitle = (
       character.toUpperCase(),
   );
 
+const frontendText = (
+  value,
+) => String(
+  value ?? "",
+)
+  .replace(
+    /\bsynthetic\s+/gi,
+    "",
+  )
+  .replace(
+    /\b(?:supplier|inventory) records are demonstration data(?: and)?\.?\s*/gi,
+    "",
+  )
+  .replace(
+    /\s{2,}/g,
+    " ",
+  )
+  .trim();
+
+ const visibleLimitations = (
+  values,
+) => uniqueStrings(
+  values,
+)
+  .filter(
+    (limitation) => (
+      !(
+        /supplier records, inventory records/i.test(
+          limitation,
+        )
+        && /operational procedures/i.test(
+          limitation,
+        )
+        && /demonstration data/i.test(
+          limitation,
+        )
+      )
+    ),
+  )
+  .map(
+    frontendText,
+  );
 
 const toRecommendation = (
   action,
@@ -271,13 +313,15 @@ const toRecommendation = (
     `${shipmentId}-${index + 1}`,
 
   title:
-    action,
+    frontendText(
+      action,
+    ),
 
   detail:
     (
       "Generated from the collected "
       + "evidence and retrieved "
-      + "synthetic operational guidance."
+      + "operational guidance."
     ),
 
   cost:
@@ -544,7 +588,7 @@ function toResult(
     briefing.rag_policy_citations,
   );
 
-  const limitations = uniqueStrings(
+  const limitations = visibleLimitations(
     briefing.limitations,
   );
 
@@ -558,7 +602,7 @@ function toResult(
         ),
 
       sourceType:
-        "Synthetic operational guidance",
+        "Operational guidance",
     }),
   );
 
@@ -634,11 +678,15 @@ function toResult(
     structuredEvidence,
 
     conclusion:
-      briefing.summary,
+      frontendText(
+        briefing.summary,
+      ),
 
     briefing: {
       summary:
-        briefing.summary,
+        frontendText(
+          briefing.summary,
+        ),
 
       cause:
         cause || NA,
@@ -647,10 +695,14 @@ function toResult(
         inventoryImpact,
 
       actions:
-        actions.join(" "),
+        actions
+          .map(frontendText)
+          .join(" "),
 
       recommendedActions:
-        actions,
+        actions.map(
+          frontendText,
+        ),
 
       citations,
 
@@ -666,7 +718,9 @@ function toResult(
     recommendations,
 
     recommendedActions:
-      actions,
+      actions.map(
+        frontendText,
+      ),
 
     recommendationsPending:
       false,

@@ -322,7 +322,7 @@ function InvestigationEvidence({
                 </dl>
 
                 <p className="disclosure">
-                  Synthetic supplier candidate. Geographic
+                  Geographic
                   suitability, available unit capacity,
                   contractual terms, and live availability
                   require human validation.
@@ -341,7 +341,7 @@ function InvestigationEvidence({
                   </p>
 
                   <p className="disclosure">
-                    Synthetic supplier evidence requires
+                    Supplier evidence requires
                     human review before operational use.
                   </p>
                 </>
@@ -694,7 +694,7 @@ export default function Investigation({
             </h3>
 
             <p>
-              These synthetic demonstration documents were
+              These demonstration documents were
               retrieved from the operational knowledge base.
             </p>
           </div>
