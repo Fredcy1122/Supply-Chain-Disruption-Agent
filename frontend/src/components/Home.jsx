@@ -2,7 +2,6 @@ import {
   Meter,
   RiskBadge,
   StatusChip,
-  money,
   pct,
   precisePct,
 } from "./ui.jsx";
@@ -77,21 +76,8 @@ export default function Home({
     )
   );
 
-  const valueAtRisk = (
-    shipmentsWithImpact.length
-      ? shipmentsWithImpact.reduce(
-        (
-          total,
-          shipment,
-        ) =>
-          total
-          + shipment
-            .impact
-            .cost,
-        0,
-      )
-      : null
-  );
+
+
 
   const highestRiskShipments = [
     ...shipments,
@@ -203,17 +189,6 @@ export default function Home({
           </span>
         </div>
 
-        <div className="stat">
-          <b>
-            {money(
-              valueAtRisk,
-            )}
-          </b>
-
-          <span>
-            Value at risk
-          </span>
-        </div>
       </section>
 
       <section className="home-section">
